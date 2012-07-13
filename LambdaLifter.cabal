@@ -1,0 +1,14 @@
+name:           LambdaLifter
+version:        0.1
+cabal-version:  >= 1.2
+build-type:     Simple
+author:         ulf
+
+executable LambdaLifter
+  hs-source-dirs:  src
+  main-is:         Main.hs
+  build-depends:   
+                   base >= 4,
+                   containers
+  ghc-options:     -Wall
+
