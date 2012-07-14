@@ -1,9 +1,12 @@
 module Main where
 
-import Prelude hiding (lookup)
-import Data.List hiding (lookup, insert)
+import Prelude hiding (lookup, filter)
+import Data.List hiding (lookup, insert, filter)
 import Data.Map hiding (map)
+import Control.Monad
 import Control.Monad.State
+import Control.Concurrent (threadDelay)
+import System.IO (BufferMode(NoBuffering),stdin, hSetBuffering, hSetEcho)
 
 -- Data tyes
 
@@ -26,12 +29,13 @@ type Level = Map Position Object
 
 
 data Movement
-        = Left
-        | Right
-        | Up
-        | Down
-        | Wait
-        | Abort
+        = MvLeft
+        | MvRight
+        | MvUp
+        | MvDown
+        | MvWait
+        | MvAbort
+        deriving Eq
 
 
 -- Levels
@@ -113,8 +117,8 @@ printLevel = sequence_ . printAList . levelToSortedAList
                 | otherwise     = LT
 
 
-updateLevel :: Level -> (Level, Level)
-updateLevel l =  runState (updateLevel' keysToUpdate l) l
+updateLevel :: Level -> Level
+updateLevel l = execState (updateLevel' keysToUpdate l) l
         where
         updateLevel' :: [Position] -> Level -> State Level Level
         updateLevel' [] _ = get
@@ -136,23 +140,23 @@ processObject :: Level -> Level -> Object -> Position -> Level
 processObject lvl lvl' o (x,y)
         = case o of
                 Rock    | lookup (x, y-1)     lvl == Just Empty
-                        -> insert (x, y-1) Rock (insert (x,y) Empty lvl')
+                        -> insert (x, y-1) Rock . insert (x,y) Empty $ lvl'
                 Rock    | lookup (x, y-1)     lvl == Just Rock &&
                           lookup (x+1, y)     lvl == Just Empty &&
                           lookup (x+1, y-1)   lvl == Just Empty
-                        -> insert (x+1, y-1) Rock (insert (x,y) Empty lvl')
+                        -> insert (x+1, y-1) Rock . insert (x,y) Empty $ lvl'
                 Rock    | lookup (x, y-1)     lvl == Just Rock &&
                           ( lookup (x+1, y)   lvl /= Just Empty ||
                             lookup (x+1, y-1) lvl /= Just Empty
                           ) &&
                           lookup (x-1, y)     lvl == Just Empty &&
                           lookup (x-1, y-1)   lvl == Just Empty
-                        -> insert (x-1, y-1) Rock (insert (x,y) Empty lvl')
+                        -> insert (x-1, y-1) Rock . insert (x,y) Empty $ lvl'
                 Rock    | lookup (x, y-1)     lvl == Just Lambda &&
                           lookup (x+1, y)     lvl == Just Empty &&
                           lookup (x+1, y-1)   lvl == Just Empty
-                        -> insert (x+1, y-1) Rock (insert (x,y) Empty lvl')
-                LiftClosed | foldr' ((||).(==Lambda)) False lvl
+                        -> insert (x+1, y-1) Rock . insert (x,y) Empty $ lvl'
+                LiftClosed | foldr' ((&&) . (/=Lambda)) True lvl
                         -> insert (x,y) LiftOpen lvl'
                 _       -> lvl'
 
@@ -162,10 +166,73 @@ st = do
         putStrLn ""
         printLevel lvl0
         putStrLn ""
-        printLevel . fst . updateLevel $ lvl0
+        printLevel . updateLevel $ lvl0
         putStrLn ""
-        printLevel . snd . updateLevel $ lvl0
+        printLevel . updateLevel $ lvl0
+
+
+
+playLevel :: Level -> IO ()
+playLevel lvl = do
+        printLevel lvl
+        dir <- getInput
+        unless (dir == MvAbort) $
+                case moveRobot lvl dir of
+                        Nothing   -> playLevel $ updateLevel lvl
+                        Just lvl' -> do
+                                printLevel lvl'
+                                let lvl'' = updateLevel lvl'
+                                threadDelay 250000 -- TODO: softcode
+                                --printLevel lvl''
+                                playLevel lvl''
+
+
+getInput :: IO Movement
+getInput = do
+        c <- getChar
+        return $ processInput c
+
+
+processInput :: Char -> Movement
+processInput c = case c of
+        'w' -> MvUp
+        'a' -> MvLeft
+        's' -> MvDown
+        'd' -> MvRight
+        'q' -> MvAbort
+        _   -> MvWait
+
+
+moveRobot :: Level -> Movement -> Maybe Level
+moveRobot lvl dir = do
+        nrp <- newRobotPosition
+        field <- lookup nrp lvl
+        case field of
+                Robot           -> return lvl
+                Empty           -> return . insert nrp Robot . insert orp Empty $ lvl
+                Earth           -> return . insert nrp Robot . insert orp Empty $ lvl
+                Lambda          -> return . insert nrp Robot . insert orp Empty $ lvl -- TODO: collect lambda
+                LiftOpen        -> return . insert nrp Robot . insert orp Empty $ lvl
+                Rock    |  dir == MvRight
+                        && lookup (rX+2, rY) lvl == Just Empty
+                                -> return . insert nrp Robot . insert (rX+2, rY) Rock . insert orp Empty $ lvl
+                Rock    |  dir == MvLeft
+                        && lookup (rX-2, rY) lvl == Just Empty
+                                -> return . insert nrp Robot . insert (rX-2, rY) Rock . insert orp Empty  $ lvl
+                _               -> Nothing
+        where
+        newRobotPosition= case dir of
+                MvUp    -> Just (rX   ,rY+1)
+                MvLeft  -> Just (rX-1 ,rY)
+                MvDown  -> Just (rX   ,rY-1)
+                MvRight -> Just (rX+1 ,rY)
+                MvWait  -> Just (rX   ,rY)
+                _       -> Nothing
+        orp@(rX, rY) = fst . elemAt 0 . filter (== Robot) $ lvl
 
 
 main :: IO ()
-main = undefined
+main = do
+        hSetEcho stdin False
+        hSetBuffering stdin NoBuffering
+        playLevel lvl1
