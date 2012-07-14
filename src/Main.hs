@@ -7,11 +7,11 @@ import Control.Monad
 import Control.Monad.State
 import Control.Concurrent (threadDelay)
 import System.IO (BufferMode(NoBuffering),stdin, hSetBuffering, hSetEcho)
+import System.Environment (getArgs)
 
 {--
 TODOs:
  - check ending conditions
- - read levels from files
  - validate levels (1 robot, 1 lift, ...)
  - use state monad (maybe GameSate = (Level, CollectedLambdas, isFinished, hasWon/isDead))
 --}
@@ -99,6 +99,12 @@ charToObject c
                 _    -> error "Invalid map sequence"
 
 
+readLevelFromFile :: FilePath -> IO Level
+readLevelFromFile f = do
+        c  <- readFile f
+        return . levelStringToMap . lines $ c
+
+
 levelStringToMap :: [String] -> Level
 levelStringToMap sl = fromList . concatMap (\(y, s) -> zip [(x,y) | x <- [1..]] (map charToObject s)) $ zip [1..] (reverse sl)
 
@@ -131,9 +137,10 @@ updateLevel l = execState (updateLevel' keysToUpdate l) l
                 modify $ flip (updateLevelByPosition lvl) pos
                 updateLevel' poss lvl
         keysToUpdate = [(x,y) | y <- [1..maxY], x <- [1..maxX]] -- TODO: ewww, wenn optimiert
-        ((maxX, maxY), _) = findMax l
+        (maxX, maxY) = (maximum xs, maximum ys)
+        (xs,ys) = unzip . keys $ l
 
-        
+       
 updateLevelByPosition :: Level -> Level -> Position -> Level
 updateLevelByPosition lvl lvl' pos
         = case lookup pos lvl of
@@ -216,10 +223,10 @@ moveRobot lvl dir = do
         where
         newRobotPosition= case dir of
                 MvUp    -> Just (rX   ,rY+1)
-                MvLeft  -> Just (rX-1 ,rY)
+                MvLeft  -> Just (rX-1 ,rY  )
                 MvDown  -> Just (rX   ,rY-1)
-                MvRight -> Just (rX+1 ,rY)
-                MvWait  -> Just (rX   ,rY)
+                MvRight -> Just (rX+1 ,rY  )
+                MvWait  -> Just (rX   ,rY  )
                 _       -> Nothing
         orp@(rX, rY) = fst . elemAt 0 . filter (== Robot) $ lvl -- TODO: eww and error-prone
 
@@ -228,6 +235,9 @@ moveRobot lvl dir = do
 
 main :: IO ()
 main = do
+        args <- getArgs
         hSetEcho stdin False
         hSetBuffering stdin NoBuffering
-        playLevel lvl1
+        level <- readLevelFromFile . concat $ args
+        playLevel level
+        
