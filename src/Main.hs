@@ -8,7 +8,8 @@ import Control.Monad.State
 import Control.Concurrent (threadDelay)
 import System.IO (BufferMode(NoBuffering),stdin, hSetBuffering, hSetEcho)
 
--- Data tyes
+
+-- Data structures
 
 data Object
         = Robot
@@ -38,7 +39,7 @@ data Movement
         deriving Eq
 
 
--- Levels
+-- Levels / Maps
 
 lvl1s :: [String]
 lvl1s =
@@ -60,9 +61,6 @@ lvl0s =
 
 lvl0 :: Level
 lvl0 = levelStringToMap lvl0s
-
-
-
 
 
 -- Functions
@@ -161,17 +159,6 @@ processObject lvl lvl' o (x,y)
                 _       -> lvl'
 
 
-st :: IO ()
-st = do
-        putStrLn ""
-        printLevel lvl0
-        putStrLn ""
-        printLevel . updateLevel $ lvl0
-        putStrLn ""
-        printLevel . updateLevel $ lvl0
-
-
-
 playLevel :: Level -> IO ()
 playLevel lvl = do
         printLevel lvl
@@ -183,7 +170,6 @@ playLevel lvl = do
                                 printLevel lvl'
                                 let lvl'' = updateLevel lvl'
                                 threadDelay 250000 -- TODO: softcode
-                                --printLevel lvl''
                                 playLevel lvl''
 
 
@@ -230,6 +216,8 @@ moveRobot lvl dir = do
                 _       -> Nothing
         orp@(rX, rY) = fst . elemAt 0 . filter (== Robot) $ lvl
 
+
+-- Main
 
 main :: IO ()
 main = do
