@@ -8,6 +8,13 @@ import Control.Monad.State
 import Control.Concurrent (threadDelay)
 import System.IO (BufferMode(NoBuffering),stdin, hSetBuffering, hSetEcho)
 
+{--
+TODOs:
+ - check ending conditions
+ - read levels from files
+ - validate levels (1 robot, 1 lift, ...)
+ - use state monad (maybe GameSate = (Level, CollectedLambdas, isFinished, hasWon/isDead))
+--}
 
 -- Data structures
 
@@ -214,7 +221,7 @@ moveRobot lvl dir = do
                 MvRight -> Just (rX+1 ,rY)
                 MvWait  -> Just (rX   ,rY)
                 _       -> Nothing
-        orp@(rX, rY) = fst . elemAt 0 . filter (== Robot) $ lvl
+        orp@(rX, rY) = fst . elemAt 0 . filter (== Robot) $ lvl -- TODO: eww and error-prone
 
 
 -- Main
