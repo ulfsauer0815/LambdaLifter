@@ -10,8 +10,7 @@ import System.Environment (getArgs)
 import Data.Char (toLower)
 
 {--
-TODOs:
- - check if the robot got crushed 
+TODOs: 
  - use state monad
 --}
 
@@ -205,10 +204,12 @@ playGame game = do
                         Nothing   -> playGame game
                         Just game' -> do
                                 printLevel . gsLevel $ game'
-                                let game'' = updateGameState game'
-                                threadDelay 125000 -- TODO: softcode
+                                let game''  = updateGameState game'
+                                let game''' = checkIfRobotGotCrushed game' game''
                                 if dir /= MvAbort
-                                  then playGame game''
+                                  then do
+                                        threadDelay 125000 -- TODO: softcode
+                                        playGame game'''
                                   else playGame game'
           else do
                 case gsProgress game of
@@ -218,6 +219,19 @@ playGame game = do
                         _       -> error "Invalid state"
                 putStrLn $ "Lambdas collected: " ++ show (gsLambdasCollected game)
                 putStrLn $ "Moves: "             ++ show (gsMoves game)
+
+
+checkIfRobotGotCrushed :: GameState -> GameState -> GameState
+checkIfRobotGotCrushed oldGs newGs
+        = if aboveOld /= Just Rock && aboveNew == Just Rock
+            then
+                newGs {gsProgress = Loss}
+            else
+                newGs
+        where
+        aboveOld        = lookup (rX,rY+1) $ gsLevel oldGs
+        aboveNew        = lookup (rX,rY+1) $ gsLevel newGs
+        (rX,rY)         = gsRobotPosition oldGs
 
 
 getInput :: IO Movement
