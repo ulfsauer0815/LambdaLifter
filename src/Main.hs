@@ -51,8 +51,6 @@ data GameProgress
         deriving Eq
 
 
--- maybe GameSate = (Level)
-
 data GameState = GameState
         { gsLevel               :: Level
         , gsLevelDimensions     :: Position -- TODO: necessary?
@@ -63,56 +61,6 @@ data GameState = GameState
         , gsLambdasCollected    :: Integer
         , gsMoves               :: Integer
         }
-
-
-
-createGame :: Level -> Maybe GameState
-createGame lvl = do
-        roboPos <- if size robos == 1
-                     then return . fst . elemAt 0 $ robos
-                     else Nothing
-        liftPos <- if size lifts == 1
-                     then return . fst . elemAt 0 $ lifts
-                     else Nothing
-        return GameState
-                { gsLevel               = lvl
-                , gsLevelDimensions     = lvlDims
-                , gsRobotPosition       = roboPos
-                , gsLiftPosition        = liftPos
-                
-                , gsProgress            = Running
-                , gsLambdasCollected    = 0
-                , gsMoves               = 0
-                }
-        where
-        robos = filter (== Robot)      lvl
-        lifts = filter (== LiftClosed) lvl
-        lvlDims = (maximum xs, maximum ys)
-        (xs,ys) = unzip . keys $ lvl
-
-
--- Levels / Maps
-
-lvl1s :: [String]
-lvl1s =
-        [ "######"
-        , "#. *R#"
-        , "#  \\.#"
-        , "#\\ * #"
-        , "L  .\\#"
-        , "######" ]
-
-lvl1 :: Level
-lvl1 = levelStringToMap lvl1s
-
-lvl0s :: [String]
-lvl0s =
-        [ "#* *#"
-        , "#* *#"
-        , "#####" ]
-
-lvl0 :: Level
-lvl0 = levelStringToMap lvl0s
 
 
 -- Functions
@@ -171,6 +119,31 @@ printLevel = sequence_ . printAList . levelToSortedAList
                 | y0 < y1       = GT
                 | x0 > x1       = GT
                 | otherwise     = LT
+
+
+createGame :: Level -> Maybe GameState
+createGame lvl = do
+        roboPos <- if size robos == 1
+                     then return . fst . elemAt 0 $ robos
+                     else Nothing
+        liftPos <- if size lifts == 1
+                     then return . fst . elemAt 0 $ lifts
+                     else Nothing
+        return GameState
+                { gsLevel               = lvl
+                , gsLevelDimensions     = lvlDims
+                , gsRobotPosition       = roboPos
+                , gsLiftPosition        = liftPos
+                
+                , gsProgress            = Running
+                , gsLambdasCollected    = 0
+                , gsMoves               = 0
+                }
+        where
+        robos = filter (== Robot)      lvl
+        lifts = filter (== LiftClosed) lvl
+        lvlDims = (maximum xs, maximum ys)
+        (xs,ys) = unzip . keys $ lvl
 
 
 updateGameState :: GameState -> GameState
