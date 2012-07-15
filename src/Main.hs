@@ -291,25 +291,27 @@ moveRobot game dir = do
         orp@(rX, rY) = gsRobotPosition game
 
 
-startGame :: Int -> GameState -> IO ()
-startGame updateDelay game = do
+startGames :: Int -> [GameState] -> IO ()
+startGames _ [] = putStrLn "You finished all levels! :)"
+startGames updateDelay games@(game:nextGames) = do
         game' <- playGame updateDelay game
         
         putStrLn $ "Lambdas collected: " ++ show (gsLambdasCollected game')
         putStrLn $ "Moves: "             ++ show (gsMoves game')
         
         case gsProgress game' of
-                Restart   -> startGame updateDelay game
+                Restart   -> startGames updateDelay games
                 Loss      -> do
                                 putStrLn "You got crushed by rocks! :("
                                 putStrLn "Press r to restart"
                                 mv <- getInput
                                 when (mv == MvRestart) $
-                                        startGame updateDelay game
-                Win       -> putStrLn "You won! Congratulations!"
+                                        startGames updateDelay games
+                Win       -> do
+                                putStrLn "You won! Congratulations!"
+                                startGames updateDelay nextGames
                 Abort     -> putStrLn "You abandoned Marvin! :'("
                 Running   -> error "Invalid state"
-                
 
 -- Main
 
@@ -319,9 +321,11 @@ main = do
         hSetBuffering stdin NoBuffering
         
         args <- getArgs
-        lvl  <- readLevelFromFile . concat $ args
-        let game = createGame lvl
-        maybe (putStrLn "Invalid level") (startGame updateDelay) game
-         
+        lvls  <- mapM readLevelFromFile args
+        let gamesM = mapM createGame lvls
+        case gamesM of
+                Nothing -> putStrLn "Error loading levels..." -- TODO: verbose error msgs
+                Just gs -> startGames updateDelay gs 
+        
         where
         updateDelay = 125000
