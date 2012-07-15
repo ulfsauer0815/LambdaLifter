@@ -194,28 +194,28 @@ processObject gs gs' o (x,y)
         lvl' = gsLevel gs'
 
 
-playGame :: GameState -> IO ()
-playGame game = do
+playGame :: Int -> GameState -> IO ()
+playGame updateDelay game = do
         printLevel . gsLevel $ game
         if gsProgress game == Running
           then do
                 dir <- getInput
                 case moveRobot game dir of
-                        Nothing   -> playGame game
+                        Nothing   -> playGame updateDelay game
                         Just game' -> do
                                 printLevel . gsLevel $ game'
                                 let game''  = updateGameState game'
                                 let game''' = checkIfRobotGotCrushed game' game''
                                 if dir /= MvAbort
                                   then do
-                                        threadDelay 125000 -- TODO: softcode
-                                        playGame game'''
-                                  else playGame game'
+                                        threadDelay updateDelay
+                                        playGame updateDelay game'''
+                                  else playGame updateDelay game'
           else do
                 case gsProgress game of
                         Win     -> putStrLn     "You won! Congratulations!"
-                        Loss    -> putStrLn     "You lost! :'("
-                        Abort   -> putStrLn     "Don't abandon me! :'("
+                        Loss    -> putStrLn     "You lost! :("
+                        Abort   -> putStrLn     "You abandoned Marvin! :'("
                         _       -> error "Invalid state"
                 putStrLn $ "Lambdas collected: " ++ show (gsLambdasCollected game)
                 putStrLn $ "Moves: "             ++ show (gsMoves game)
@@ -303,4 +303,6 @@ main = do
         args <- getArgs
         lvl  <- readLevelFromFile . concat $ args
         let game = createGame lvl
-        maybe (putStrLn "Invalid level") playGame game
+        maybe (putStrLn "Invalid level") (playGame updateDelay) game
+        where
+        updateDelay = 125000
