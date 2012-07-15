@@ -7,6 +7,7 @@ import Control.Monad.State
 import Control.Concurrent (threadDelay)
 import System.IO (BufferMode(NoBuffering),stdin, hSetBuffering, hSetEcho)
 import System.Environment (getArgs)
+import Data.Char (toLower)
 
 {--
 TODOs:
@@ -226,13 +227,14 @@ getInput = do
 
 
 processInput :: Char -> Movement
-processInput c = case c of
+processInput c = case lc of
         'w' -> MvUp
         'a' -> MvLeft
         's' -> MvDown
         'd' -> MvRight
         'q' -> MvAbort
         _   -> MvWait
+        where lc = toLower c
 
 
 moveRobot :: GameState -> Movement -> Maybe GameState -- TODO: Maybe unnecessary
