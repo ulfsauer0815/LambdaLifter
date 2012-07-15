@@ -41,6 +41,7 @@ data Movement
         | MvDown
         | MvWait
         | MvAbort
+        | MvRestart
         deriving Eq
 
 data GameProgress
@@ -48,6 +49,7 @@ data GameProgress
         | Win
         | Loss
         | Abort
+        | Restart
         deriving Eq
 
 
@@ -194,31 +196,25 @@ processObject gs gs' o (x,y)
         lvl' = gsLevel gs'
 
 
-playGame :: Int -> GameState -> IO ()
+playGame :: Int -> GameState -> IO GameState
 playGame updateDelay game = do
         printLevel . gsLevel $ game
         if gsProgress game == Running
           then do
                 dir <- getInput
-                case moveRobot game dir of
-                        Nothing   -> playGame updateDelay game
-                        Just game' -> do
-                                printLevel . gsLevel $ game'
-                                let game''  = updateGameState game'
-                                let game''' = checkIfRobotGotCrushed game' game''
-                                if dir /= MvAbort
-                                  then do
-                                        threadDelay updateDelay
-                                        playGame updateDelay game'''
-                                  else playGame updateDelay game'
-          else do
-                case gsProgress game of
-                        Win     -> putStrLn     "You won! Congratulations!"
-                        Loss    -> putStrLn     "You lost! :("
-                        Abort   -> putStrLn     "You abandoned Marvin! :'("
-                        _       -> error "Invalid state"
-                putStrLn $ "Lambdas collected: " ++ show (gsLambdasCollected game)
-                putStrLn $ "Moves: "             ++ show (gsMoves game)
+                case dir of
+                        MvAbort         -> return game {gsProgress = Abort}
+                        MvRestart       -> return game {gsProgress = Restart}
+                        _               -> 
+                                case moveRobot game dir of
+                                        Nothing   -> playGame updateDelay game
+                                        Just game' -> do
+                                                printLevel . gsLevel $ game'
+                                                let game''  = updateGameState game'
+                                                let game''' = checkIfRobotGotCrushed game' game''
+                                                threadDelay updateDelay
+                                                playGame updateDelay game'''
+          else return game
 
 
 checkIfRobotGotCrushed :: GameState -> GameState -> GameState
@@ -245,6 +241,7 @@ processInput c = case toLower c of
         's' -> MvDown
         'd' -> MvRight
         'q' -> MvAbort
+        'r' -> MvRestart
         _   -> MvWait
 
 
@@ -284,14 +281,35 @@ moveRobot game dir = do
                 _               -> Nothing
         where
         newRobotPosition= case dir of
-                MvUp    -> Just (rX   ,rY+1)
-                MvLeft  -> Just (rX-1 ,rY  )
-                MvDown  -> Just (rX   ,rY-1)
-                MvRight -> Just (rX+1 ,rY  )
-                MvWait  -> Just (rX   ,rY  )
-                MvAbort -> Just (rX   ,rY  ) -- use Nothing to produce an invalid GameState
+                MvUp            -> Just (rX   ,rY+1)
+                MvLeft          -> Just (rX-1 ,rY  )
+                MvDown          -> Just (rX   ,rY-1)
+                MvRight         -> Just (rX+1 ,rY  )
+                MvWait          -> Just (rX   ,rY  )
+                MvRestart       -> Just (rX   ,rY  )
+                MvAbort         -> Just (rX   ,rY  ) -- use Nothing to produce an invalid GameState
         orp@(rX, rY) = gsRobotPosition game
 
+
+startGame :: Int -> GameState -> IO ()
+startGame updateDelay game = do
+        game' <- playGame updateDelay game
+        
+        putStrLn $ "Lambdas collected: " ++ show (gsLambdasCollected game')
+        putStrLn $ "Moves: "             ++ show (gsMoves game')
+        
+        case gsProgress game' of
+                Restart   -> startGame updateDelay game
+                Loss      -> do
+                                putStrLn "You got crushed by rocks! :("
+                                putStrLn "Press r to restart"
+                                mv <- getInput
+                                when (mv == MvRestart) $
+                                        startGame updateDelay game
+                Win       -> putStrLn "You won! Congratulations!"
+                Abort     -> putStrLn "You abandoned Marvin! :'("
+                Running   -> error "Invalid state"
+                
 
 -- Main
 
@@ -303,6 +321,7 @@ main = do
         args <- getArgs
         lvl  <- readLevelFromFile . concat $ args
         let game = createGame lvl
-        maybe (putStrLn "Invalid level") (playGame updateDelay) game
+        maybe (putStrLn "Invalid level") (startGame updateDelay) game
+         
         where
         updateDelay = 125000
