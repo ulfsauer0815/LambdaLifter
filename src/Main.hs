@@ -3,7 +3,6 @@ module Main where
 import Prelude hiding (lookup, filter)
 import Data.List hiding (lookup, insert, filter)
 import Data.Map hiding (map)
-import Control.Monad
 import Control.Monad.State
 import Control.Concurrent (threadDelay)
 import System.IO (BufferMode(NoBuffering),stdin, hSetBuffering, hSetEcho)
@@ -11,9 +10,9 @@ import System.Environment (getArgs)
 
 {--
 TODOs:
- - check ending conditions
+ - check if the robot got crushed 
  - validate levels (1 robot, 1 lift, ...)
- - use state monad (maybe GameSate = (Level, CollectedLambdas, isFinished, hasWon/isDead))
+ - use state monad
 --}
 
 -- Data structures
@@ -44,6 +43,46 @@ data Movement
         | MvWait
         | MvAbort
         deriving Eq
+
+data GameProgress
+        = Running
+        | Win
+        | Loss
+        | Abort
+        deriving Eq
+
+
+-- maybe GameSate = (Level)
+
+data GameState = GameState
+        { gsLevel               :: Level
+        , gsLevelDimensions     :: Position -- TODO: necessary?
+        , gsRobotPosition       :: Position
+        , gsLiftPosition        :: Position
+        
+        , gsProgress            :: GameProgress
+        , gsLambdasCollected    :: Integer
+        , gsMoves               :: Integer
+        }
+
+
+
+createGame :: Level -> GameState
+createGame lvl = GameState
+        { gsLevel               = lvl
+        , gsLevelDimensions     = lvlDims
+        , gsRobotPosition       = roboPos
+        , gsLiftPosition        = liftPos
+        
+        , gsProgress            = Running
+        , gsLambdasCollected    = 0
+        , gsMoves               = 0
+        }
+        where
+        roboPos = fst . elemAt 0 . filter (== Robot)      $ lvl -- TODO: eww and error-prone
+        liftPos = fst . elemAt 0 . filter (== LiftClosed) $ lvl -- TODO: eww and error-prone
+        lvlDims = (maximum xs, maximum ys)
+        (xs,ys) = unzip . keys $ lvl
 
 
 -- Levels / Maps
@@ -128,29 +167,28 @@ printLevel = sequence_ . printAList . levelToSortedAList
                 | otherwise     = LT
 
 
-updateLevel :: Level -> Level
-updateLevel l = execState (updateLevel' keysToUpdate l) l
+updateGameState :: GameState -> GameState
+updateGameState gs = execState (updateLevel' keysToUpdate gs) gs
         where
-        updateLevel' :: [Position] -> Level -> State Level Level
+        updateLevel' :: [Position] -> GameState -> State GameState GameState
         updateLevel' [] _ = get
         updateLevel' (pos:poss) lvl = do
                 modify $ flip (updateLevelByPosition lvl) pos
                 updateLevel' poss lvl
         keysToUpdate = [(x,y) | y <- [1..maxY], x <- [1..maxX]] -- TODO: ewww, wenn optimiert
-        (maxX, maxY) = (maximum xs, maximum ys)
-        (xs,ys) = unzip . keys $ l
+        (maxX, maxY) = gsLevelDimensions gs
 
        
-updateLevelByPosition :: Level -> Level -> Position -> Level
-updateLevelByPosition lvl lvl' pos
-        = case lookup pos lvl of
-                Nothing -> lvl'
-                Just e -> processObject lvl lvl' e pos
+updateLevelByPosition :: GameState -> GameState -> Position -> GameState
+updateLevelByPosition gs gs' pos
+        = case lookup pos (gsLevel gs) of
+                Nothing -> gs'
+                Just e -> processObject gs gs' e pos
 
 
-processObject :: Level -> Level -> Object -> Position -> Level
-processObject lvl lvl' o (x,y)
-        = case o of
+processObject :: GameState -> GameState -> Object -> Position -> GameState
+processObject gs gs' o (x,y)
+        = gs'   { gsLevel = case o of
                 Rock    | lookup (x, y-1)     lvl == Just Empty
                         -> insert (x, y-1) Rock . insert (x,y) Empty $ lvl'
                 Rock    | lookup (x, y-1)     lvl == Just Rock &&
@@ -171,20 +209,35 @@ processObject lvl lvl' o (x,y)
                 LiftClosed | foldr' ((&&) . (/=Lambda)) True lvl
                         -> insert (x,y) LiftOpen lvl'
                 _       -> lvl'
+                }
+        where
+        lvl = gsLevel gs
+        lvl' = gsLevel gs'
 
 
-playLevel :: Level -> IO ()
-playLevel lvl = do
-        printLevel lvl
-        dir <- getInput
-        unless (dir == MvAbort) $
-                case moveRobot lvl dir of
-                        Nothing   -> playLevel $ updateLevel lvl
-                        Just lvl' -> do
-                                printLevel lvl'
-                                let lvl'' = updateLevel lvl'
-                                threadDelay 250000 -- TODO: softcode
-                                playLevel lvl''
+playGame :: GameState -> IO ()
+playGame game = do
+        printLevel . gsLevel $ game
+        if gsProgress game == Running
+          then do
+                dir <- getInput
+                case moveRobot game dir of
+                        Nothing   -> playGame game
+                        Just game' -> do
+                                printLevel . gsLevel $ game'
+                                let game'' = updateGameState game'
+                                threadDelay 125000 -- TODO: softcode
+                                if dir /= MvAbort
+                                  then playGame game''
+                                  else playGame game'
+          else do
+                case gsProgress game of
+                        Win     -> putStrLn "You won! Congratulations!"
+                        Loss    -> putStrLn "You lost! :'("
+                        Abort   -> putStrLn "Don't abandon me! :'("
+                        _       -> error "Invalid state"
+                putStrLn $ "Lambdas collected: " ++ show (gsLambdasCollected game)
+                putStrLn $ "Moves: "             ++ show (gsMoves game)
 
 
 getInput :: IO Movement
@@ -203,22 +256,39 @@ processInput c = case c of
         _   -> MvWait
 
 
-moveRobot :: Level -> Movement -> Maybe Level
-moveRobot lvl dir = do
+moveRobot :: GameState -> Movement -> Maybe GameState -- TODO: Maybe unnecessary
+moveRobot game dir = do
+        let lvl = gsLevel game
         nrp <- newRobotPosition
         field <- lookup nrp lvl
         case field of
-                Robot           -> return lvl
-                Empty           -> return . insert nrp Robot . insert orp Empty $ lvl
-                Earth           -> return . insert nrp Robot . insert orp Empty $ lvl
-                Lambda          -> return . insert nrp Robot . insert orp Empty $ lvl -- TODO: collect lambda
-                LiftOpen        -> return . insert nrp Robot . insert orp Empty $ lvl
+                Robot   | dir == MvWait
+                                -> return game
+                Robot   | dir == MvAbort
+                                -> return game  { gsProgress = Abort}
+                Empty           -> return game  { gsLevel = insert nrp Robot . insert orp Empty $ lvl
+                                                , gsRobotPosition = nrp
+                                                , gsMoves = gsMoves game + 1}
+                Earth           -> return game  { gsLevel = insert nrp Robot . insert orp Empty $ lvl
+                                                , gsRobotPosition = nrp, gsMoves = gsMoves game + 1}
+                Lambda          -> return game  { gsLevel = insert nrp Robot . insert orp Empty $ lvl
+                                                , gsLambdasCollected = gsLambdasCollected game + 1
+                                                , gsRobotPosition = nrp
+                                                , gsMoves = gsMoves game + 1}
+                LiftOpen        -> return game  { gsLevel = insert nrp Robot . insert orp Empty $ lvl
+                                                , gsProgress = Win
+                                                , gsRobotPosition = nrp
+                                                , gsMoves = gsMoves game + 1}
                 Rock    |  dir == MvRight
                         && lookup (rX+2, rY) lvl == Just Empty
-                                -> return . insert nrp Robot . insert (rX+2, rY) Rock . insert orp Empty $ lvl
+                                -> return game  { gsLevel = insert nrp Robot . insert (rX+2, rY) Rock . insert orp Empty $ lvl
+                                                , gsRobotPosition = nrp
+                                                , gsMoves = gsMoves game + 1}
                 Rock    |  dir == MvLeft
                         && lookup (rX-2, rY) lvl == Just Empty
-                                -> return . insert nrp Robot . insert (rX-2, rY) Rock . insert orp Empty  $ lvl
+                                -> return game  { gsLevel = insert nrp Robot . insert (rX-2, rY) Rock . insert orp Empty  $ lvl
+                                                , gsRobotPosition = nrp
+                                                , gsMoves = gsMoves game + 1}
                 _               -> Nothing
         where
         newRobotPosition= case dir of
@@ -227,17 +297,19 @@ moveRobot lvl dir = do
                 MvDown  -> Just (rX   ,rY-1)
                 MvRight -> Just (rX+1 ,rY  )
                 MvWait  -> Just (rX   ,rY  )
-                _       -> Nothing
-        orp@(rX, rY) = fst . elemAt 0 . filter (== Robot) $ lvl -- TODO: eww and error-prone
+                MvAbort -> Just (rX   ,rY  ) -- use Nothing to produce an invalid GameState
+        orp@(rX, rY) = gsRobotPosition game
 
 
 -- Main
 
 main :: IO ()
 main = do
-        args <- getArgs
         hSetEcho stdin False
         hSetBuffering stdin NoBuffering
-        level <- readLevelFromFile . concat $ args
-        playLevel level
+        
+        args <- getArgs
+        lvl <- readLevelFromFile . concat $ args
+        let game = createGame lvl
+        playGame game
         
