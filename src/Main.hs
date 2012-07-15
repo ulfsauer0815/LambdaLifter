@@ -68,14 +68,14 @@ data GameState = GameState
 objectToChar :: Object -> Char
 objectToChar o
         = case o of
-                Robot -> 'R'
-                Wall -> '#'
-                Rock -> '*' 
-                Lambda -> '\\'
-                LiftClosed -> 'L'
-                LiftOpen -> 'O'
-                Earth -> '.'
-                Empty -> ' ' -- TODO: eww? see note below
+                Robot           -> 'R'
+                Wall            -> '#'
+                Rock            -> '*' 
+                Lambda          -> '\\'
+                LiftClosed      -> 'L'
+                LiftOpen        -> 'O'
+                Earth           -> '.'
+                Empty           -> ' ' -- TODO: eww? see note below
 
 
 charToObject :: Char -> Object
@@ -89,7 +89,7 @@ charToObject c
                 'O'  -> LiftOpen
                 '.'  -> Earth
                 ' '  -> Empty
-                _    -> error "Invalid map sequence"
+                _    -> error $ "Cannot convert \"" ++ c : "\" to Object: no mapping found"
 
 
 readLevelFromFile :: FilePath -> IO Level
@@ -213,9 +213,9 @@ playGame game = do
                                   else playGame game'
           else do
                 case gsProgress game of
-                        Win     -> putStrLn "You won! Congratulations!"
-                        Loss    -> putStrLn "You lost! :'("
-                        Abort   -> putStrLn "Don't abandon me! :'("
+                        Win     -> putStrLn     "You won! Congratulations!"
+                        Loss    -> putStrLn     "You lost! :'("
+                        Abort   -> putStrLn     "Don't abandon me! :'("
                         _       -> error "Invalid state"
                 putStrLn $ "Lambdas collected: " ++ show (gsLambdasCollected game)
                 putStrLn $ "Moves: "             ++ show (gsMoves game)
@@ -235,26 +235,23 @@ checkIfRobotGotCrushed oldGs newGs
 
 
 getInput :: IO Movement
-getInput = do
-        c <- getChar
-        return $ processInput c
+getInput = liftM processInput getChar
 
 
 processInput :: Char -> Movement
-processInput c = case lc of
+processInput c = case toLower c of
         'w' -> MvUp
         'a' -> MvLeft
         's' -> MvDown
         'd' -> MvRight
         'q' -> MvAbort
         _   -> MvWait
-        where lc = toLower c
 
 
 moveRobot :: GameState -> Movement -> Maybe GameState -- TODO: Maybe unnecessary
 moveRobot game dir = do
         let lvl = gsLevel game
-        nrp <- newRobotPosition
+        nrp   <- newRobotPosition
         field <- lookup nrp lvl
         case field of
                 Robot   | dir == MvWait
@@ -304,7 +301,6 @@ main = do
         hSetBuffering stdin NoBuffering
         
         args <- getArgs
-        lvl <- readLevelFromFile . concat $ args
+        lvl  <- readLevelFromFile . concat $ args
         let game = createGame lvl
         maybe (putStrLn "Invalid level") playGame game
-        
