@@ -11,7 +11,6 @@ import System.Environment (getArgs)
 {--
 TODOs:
  - check if the robot got crushed 
- - validate levels (1 robot, 1 lift, ...)
  - use state monad
 --}
 
@@ -67,20 +66,27 @@ data GameState = GameState
 
 
 
-createGame :: Level -> GameState
-createGame lvl = GameState
-        { gsLevel               = lvl
-        , gsLevelDimensions     = lvlDims
-        , gsRobotPosition       = roboPos
-        , gsLiftPosition        = liftPos
-        
-        , gsProgress            = Running
-        , gsLambdasCollected    = 0
-        , gsMoves               = 0
-        }
+createGame :: Level -> Maybe GameState
+createGame lvl = do
+        roboPos <- if size robos == 1
+                     then return . fst . elemAt 0 $ robos
+                     else Nothing
+        liftPos <- if size lifts == 1
+                     then return . fst . elemAt 0 $ lifts
+                     else Nothing
+        return GameState
+                { gsLevel               = lvl
+                , gsLevelDimensions     = lvlDims
+                , gsRobotPosition       = roboPos
+                , gsLiftPosition        = liftPos
+                
+                , gsProgress            = Running
+                , gsLambdasCollected    = 0
+                , gsMoves               = 0
+                }
         where
-        roboPos = fst . elemAt 0 . filter (== Robot)      $ lvl -- TODO: eww and error-prone
-        liftPos = fst . elemAt 0 . filter (== LiftClosed) $ lvl -- TODO: eww and error-prone
+        robos = filter (== Robot)      lvl
+        lifts = filter (== LiftClosed) lvl
         lvlDims = (maximum xs, maximum ys)
         (xs,ys) = unzip . keys $ lvl
 
@@ -311,5 +317,5 @@ main = do
         args <- getArgs
         lvl <- readLevelFromFile . concat $ args
         let game = createGame lvl
-        playGame game
+        maybe (putStrLn "Invalid level") playGame game
         
