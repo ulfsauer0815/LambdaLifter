@@ -42,6 +42,7 @@ data Movement
         | MvWait
         | MvAbort
         | MvRestart
+        | MvSkip
         deriving Eq
 
 data GameProgress
@@ -50,6 +51,7 @@ data GameProgress
         | Loss
         | Abort
         | Restart
+        | Skip
         deriving Eq
 
 
@@ -205,6 +207,7 @@ playGame updateDelay game = do
                 case dir of
                         MvAbort         -> return game {gsProgress = Abort}
                         MvRestart       -> return game {gsProgress = Restart}
+                        MvSkip       -> return game {gsProgress = Skip}
                         _               -> 
                                 case moveRobot game dir of
                                         Nothing   -> playGame updateDelay game
@@ -242,6 +245,7 @@ processInput c = case toLower c of
         'd' -> MvRight
         'q' -> MvAbort
         'r' -> MvRestart
+        'n' -> MvSkip
         _   -> MvWait
 
 
@@ -285,9 +289,7 @@ moveRobot game dir = do
                 MvLeft          -> Just (rX-1 ,rY  )
                 MvDown          -> Just (rX   ,rY-1)
                 MvRight         -> Just (rX+1 ,rY  )
-                MvWait          -> Just (rX   ,rY  )
-                MvRestart       -> Just (rX   ,rY  )
-                MvAbort         -> Just (rX   ,rY  ) -- use Nothing to produce an invalid GameState
+                _               -> Just (rX   ,rY  ) -- use Nothing to produce an invalid GameState
         orp@(rX, rY) = gsRobotPosition game
 
 
@@ -310,6 +312,7 @@ startGames updateDelay games@(game:nextGames) = do
                 Win       -> do
                                 putStrLn "You won! Congratulations!"
                                 startGames updateDelay nextGames
+                Skip      -> startGames updateDelay (nextGames ++ [game])
                 Abort     -> putStrLn "You abandoned Marvin! :'("
                 Running   -> error "Invalid state"
 
