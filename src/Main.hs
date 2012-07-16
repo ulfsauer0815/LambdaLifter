@@ -11,6 +11,7 @@ import Data.Char (toLower)
 
 {--
 TODOs: 
+ - add (global) scoring
  - use state monad
 --}
 
@@ -291,7 +292,7 @@ moveRobot game dir = do
                 MvRight         -> Just (rX+1 ,rY  )
                 _               -> Just (rX   ,rY  ) -- use Nothing to produce an invalid GameState
         orp@(rX, rY) = gsRobotPosition game
-
+        
 
 startGames :: Int -> [GameState] -> IO ()
 startGames _ [] = putStrLn "You finished all levels! :)"
@@ -305,25 +306,26 @@ startGames updateDelay games@(game:nextGames) = do
                 Restart   -> restartLevel
                 Loss      -> do
                                 putStrLn "You got crushed by rocks! :("
-                                putStrLn "Press 'r' to restart, 'n' to skip the level or 'q' to quit"
-                                askAction
+                                restartLevel
                 Win       -> do
                                 putStrLn "You won! Congratulations!"
                                 startGames updateDelay nextGames
-                Skip      -> skipLevel
-                Abort     -> abortLevel
+                Skip      -> startGames updateDelay (nextGames ++ [game])
+                Abort     -> putStrLn "You abandoned Marvin! :'("
                 Running   -> error "Invalid state"
         where
-        skipLevel    = startGames updateDelay (nextGames ++ [game])
         restartLevel = startGames updateDelay games
-        abortLevel   = putStrLn "You abandoned Marvin! :'("
-        askAction = do
-                action <- getInput
-                case action of
-                        MvRestart -> restartLevel
-                        MvAbort   -> abortLevel
-                        MvSkip    -> skipLevel
-                        _         -> askAction
+
+
+printControls :: IO ()
+printControls = do
+        putStrLn "Controls: "
+        putStrLn "  WASD to move"
+        putStrLn "  E to wait"
+        putStrLn "  R to restart"
+        putStrLn "  N to skip the level"
+        putStrLn "  Q to quit"
+
 -- Main
 
 main :: IO ()
@@ -336,7 +338,10 @@ main = do
         let gamesM = mapM createGame lvls
         case gamesM of
                 Nothing -> putStrLn "Error loading levels..." -- TODO: verbose error msgs
-                Just gs -> startGames updateDelay gs 
+                Just gs -> do
+                        putStrLn "Welcome to LambdaLifter (alpha)"
+                        printControls
+                        startGames updateDelay gs
         
         where
         updateDelay = 125000
