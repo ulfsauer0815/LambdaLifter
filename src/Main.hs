@@ -302,20 +302,28 @@ startGames updateDelay games@(game:nextGames) = do
         putStrLn $ "Moves: "             ++ show (gsMoves game')
         
         case gsProgress game' of
-                Restart   -> startGames updateDelay games
+                Restart   -> restartLevel
                 Loss      -> do
                                 putStrLn "You got crushed by rocks! :("
-                                putStrLn "Press r to restart"
-                                mv <- getInput
-                                when (mv == MvRestart) $
-                                        startGames updateDelay games
+                                putStrLn "Press 'r' to restart, 'n' to skip the level or 'q' to quit"
+                                askAction
                 Win       -> do
                                 putStrLn "You won! Congratulations!"
                                 startGames updateDelay nextGames
-                Skip      -> startGames updateDelay (nextGames ++ [game])
-                Abort     -> putStrLn "You abandoned Marvin! :'("
+                Skip      -> skipLevel
+                Abort     -> abortLevel
                 Running   -> error "Invalid state"
-
+        where
+        skipLevel    = startGames updateDelay (nextGames ++ [game])
+        restartLevel = startGames updateDelay games
+        abortLevel   = putStrLn "You abandoned Marvin! :'("
+        askAction = do
+                action <- getInput
+                case action of
+                        MvRestart -> restartLevel
+                        MvAbort   -> abortLevel
+                        MvSkip    -> skipLevel
+                        _         -> askAction
 -- Main
 
 main :: IO ()
