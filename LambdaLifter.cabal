@@ -10,6 +10,7 @@ executable LambdaLifter
   build-depends:   
                    base >= 4,
                    containers,
-                   mtl
+                   mtl,
+                   ansi-terminal
   ghc-options:     -Wall
 

@@ -1,10 +1,11 @@
 module Game ( Object(..), Position, Level(..), GameProgress(..), GameState(..)
-            , charToObject, objectToChar, printLevel )
+            , charToObject, objectToChar, objectColor, printLevel )
 where
 
 import Data.List (sortBy)
 import Data.Map as M (Map, null, toList)
 import Control.Monad
+import System.Console.ANSI ( SGR(..), ConsoleLayer(..), ColorIntensity(..), Color(..), setSGR )
 
 -- Data structures
 
@@ -74,7 +75,7 @@ objectToChar o
                 Earth           -> '.'
                 Trampoline c    -> c
                 Target c        -> c
-                Empty           -> ' ' -- TODO: eww? see note below
+                Empty           -> ' '
 
 
 charToObject :: Char -> Object
@@ -93,6 +94,24 @@ charToObject c
                 a   -> error $ "Cannot convert \"" ++ a : "\" to Object: no mapping found"
 
 
+
+
+objectColor :: Object -> [SGR]
+objectColor o
+        = case o of
+                Robot           -> return $ SetColor Foreground Dull Blue
+                Wall            -> []
+                Rock            -> return $ SetColor Foreground Vivid Red 
+                Lambda          -> return $ SetColor Foreground Dull Cyan
+                LiftClosed      -> return $ SetColor Foreground Dull Green
+                LiftOpen        -> return $ SetColor Foreground Vivid Green
+                Earth           -> []
+                Trampoline _    -> return $ SetColor Foreground Vivid Magenta
+                Target _        -> return $ SetColor Foreground Dull Magenta
+                Empty           -> []
+
+
+
 -- Print functions for data structures
 
 printLevel :: Level -> IO ()
@@ -107,13 +126,18 @@ printLevel l = do
 
 
 printLevelMap :: Level -> IO ()
-printLevelMap = sequence_ . printAList . levelToSortedAList
+printLevelMap l = (sequence_ . printAList . levelToSortedAList) l >> setSGR [ Reset ]
         where
+        print' o = printNoNl' o >> putStrLn ""
+        printNoNl' o = do
+                setSGR (objectColor o)
+                putChar . objectToChar $ o
+        
         printAList :: [(Position, Object)] -> [IO ()]
         printAList ls@(((x0,_),o):((x1,_),_):_)
-                | x1 < x0 = print o : (printAList . tail) ls
-                | otherwise = (putChar . objectToChar) o : (printAList . tail) ls
-        printAList (((_,_),o):xs) = (putChar . objectToChar) o : printAList xs
+                | x1 < x0 = print' o : (printAList . tail) ls
+                | otherwise = printNoNl' o : (printAList . tail) ls
+        printAList (((_,_),o):xs) = printNoNl' o : printAList xs
         printAList [] = [putStrLn ""]
 
         levelToSortedAList :: Level -> [(Position, Object)]

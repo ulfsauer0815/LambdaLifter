@@ -1,7 +1,8 @@
-module Input ( UserInput(..), getInput, showKeyMapping, printControls ) where
+module Input ( UserInput(..), getInput, showKeyMapping, printControls, askForContinue, askForContinue_) where
 
 import Control.Monad ( liftM )
 import Data.Char ( toLower )
+import System.Console.ANSI ( SGR(..), BlinkSpeed(..), setSGR )
 
 data UserInput
         = MvLeft
@@ -12,6 +13,7 @@ data UserInput
         | MvAbort
         | MvRestart
         | MvSkip
+        | MvContinue
         deriving Eq
 
 -- Input processing
@@ -28,7 +30,8 @@ showKeyMapping a = case a of
         MvAbort   -> "Q" 
         MvRestart -> "R" 
         MvSkip    -> "N"
-        MvWait    -> "E" 
+        MvWait    -> "E"
+        MvContinue-> "SPACE"  
 
 
 processInput :: Char -> UserInput
@@ -40,7 +43,27 @@ processInput c = case toLower c of
         'q' -> MvAbort
         'r' -> MvRestart
         'n' -> MvSkip
+        ' ' -> MvContinue
         _   -> MvWait
+
+
+askForContinue :: IO () -> IO () -> IO ()
+askForContinue actionAbort actionContinue = do
+        setSGR [SetBlinkSpeed SlowBlink]
+        putStrLn $ "Press " ++ showKeyMapping MvContinue ++ " to continue."
+        askForContinue'
+        setSGR [Reset]
+        where
+        askForContinue' = do
+                a <- getInput
+                case a of
+                        MvContinue -> actionContinue
+                        MvAbort    -> actionAbort
+                        _          -> askForContinue'
+
+
+askForContinue_ :: IO () -> IO ()
+askForContinue_ = askForContinue (return ())
 
 
 printControls :: IO ()

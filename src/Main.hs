@@ -6,6 +6,7 @@ import Control.Monad.State
 import Control.Concurrent ( threadDelay )
 import System.IO ( BufferMode(NoBuffering), stdin, hSetBuffering, hSetEcho )
 import System.Environment ( getArgs )
+import System.Console.ANSI --(clearScreen, hideCursor, showCursor)
 
 import Utils
 import Game
@@ -17,6 +18,18 @@ TODOs:
  - add (global) scoring
  - use state monad
 --}
+
+
+
+data Delays = Delays
+        { deMapUpdate          :: Int
+        }
+
+
+defaultDelays :: Delays
+defaultDelays = Delays
+        { deMapUpdate          = 12500
+        }
 
 
 -- Functions
@@ -58,10 +71,10 @@ createGame lvl = do
         filterMaybeTuples1 ls = [(x,y) | (x, Just y) <- ls]
 
        
-startGames :: Int -> [GameState] -> IO ()
+startGames :: Delays -> [GameState] -> IO ()
 startGames _ [] = putStrLn "You finished all levels! :)"
-startGames updateDelay games@(game:nextGames) = do
-        game' <- playGame updateDelay game
+startGames delays games@(game:nextGames) = do
+        game' <- playGame delays game
         
         putStrLn $ "Lambdas collected: " ++ show (gsLambdasCollected game')
         putStrLn $ "Moves: "             ++ show (gsMoves game')
@@ -70,19 +83,20 @@ startGames updateDelay games@(game:nextGames) = do
                 Restart   -> restartLevel
                 Loss      -> do
                                 putStrLn "You got crushed by rocks! :("
-                                restartLevel
+                                askForContinue_ restartLevel
                 Win       -> do
                                 putStrLn "You won! Congratulations!"
-                                startGames updateDelay nextGames
-                Skip      -> startGames updateDelay (nextGames ++ [game])
+                                askForContinue_ (startGames delays nextGames)
+                Skip      -> startGames delays (nextGames ++ [game])
                 Abort     -> putStrLn "You abandoned Marvin! :'("
                 Running   -> error "Invalid state"
         where
-        restartLevel = startGames updateDelay games
+        restartLevel = startGames delays games
 
 
-playGame :: Int -> GameState -> IO GameState
-playGame updateDelay game = do
+playGame :: Delays -> GameState -> IO GameState
+playGame delays game = do
+        clearScreen
         printLevel . gsLevel $ game
         if gsProgress game == Running
           then do
@@ -93,13 +107,14 @@ playGame updateDelay game = do
                         MvSkip          -> return game {gsProgress = Skip}
                         _               -> 
                                 case moveRobot game dir of
-                                        Nothing   -> playGame updateDelay game
+                                        Nothing   -> playGame delays game
                                         Just game' -> do
+                                                clearScreen
                                                 printLevel . gsLevel $ game'
                                                 let game''  = updateGameState game'
                                                 let game''' = checkIfRobotGotCrushed game' game''
-                                                threadDelay updateDelay
-                                                playGame updateDelay game'''
+                                                threadDelay $ deMapUpdate delays
+                                                playGame delays game'''
           else return game
 
 
@@ -224,16 +239,20 @@ main :: IO ()
 main = do
         hSetEcho stdin False
         hSetBuffering stdin NoBuffering
-        
+        hideCursor
+            
         args <- getArgs
         lvls  <- mapM readLevelFile args
         let gamesM = mapM createGame lvls
         case gamesM of
                 Nothing -> putStrLn "Error loading levels..." -- TODO: verbose error msgs
                 Just gs -> do
+                        clearScreen
                         putStrLn "Welcome to LambdaLifter (alpha)"
+                        putStrLn ""
                         printControls
-                        startGames updateDelay gs
+                        askForContinue_ (startGames delays gs)
         
+        showCursor
         where
-        updateDelay = 125000
+        delays = defaultDelays
