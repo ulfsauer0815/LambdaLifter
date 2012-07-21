@@ -1,12 +1,12 @@
 module Main where
 
 import Prelude          as P hiding ( lookup )
-import Data.Map         as M ( toList, keys, size, filter, lookup, insert, elemAt, foldr' )
+import Data.Map         as M ( toList, keys, size, filter, lookup, insert, elemAt, foldr', delete )
 import Control.Monad.State
 import Control.Concurrent ( threadDelay )
 import System.IO ( BufferMode(NoBuffering), stdin, hSetBuffering, hSetEcho )
 import System.Environment ( getArgs )
-import System.Console.ANSI --(clearScreen, hideCursor, showCursor)
+import System.Console.ANSI (clearScreen, hideCursor, showCursor)
 
 import Utils
 import Game
@@ -43,7 +43,7 @@ createGame lvl = do
                      then return . fst . elemAt 0 $ lifts
                      else Nothing
         return GameState
-                { gsLevel               = lvl
+                { gsLevel               = lvl { lvMap = insert roboPos Empty (lvMap lvl)} -- delete robot start position 
                 , gsLevelDimensions     = lvlDims
                 , gsRobotPosition       = roboPos
                 , gsLiftPosition        = liftPos
@@ -63,10 +63,6 @@ createGame lvl = do
         lifts = M.filter (== LiftClosed) lmap
         lvlDims = (maximum xs, maximum ys)
         (xs,ys) = unzip . keys $ lmap
-        isTrampoline (Trampoline _)     = True
-        isTrampoline _                  = False
-        isTarget (Target _)             = True
-        isTarget _                      = True
         targetSourcePositions = listMap . filterMaybeTuples1 . map (\(pos,obj) -> (pos, lookup obj (revertMap trams)) ) . toList $ lvTrampolines lvl
         filterMaybeTuples1 ls = [(x,y) | (x, Just y) <- ls]
 
@@ -97,7 +93,7 @@ startGames delays games@(game:nextGames) = do
 playGame :: Delays -> GameState -> IO GameState
 playGame delays game = do
         clearScreen
-        printLevel . gsLevel $ game
+        printLevel game
         if gsProgress game == Running
           then do
                 dir <- getInput
@@ -110,7 +106,7 @@ playGame delays game = do
                                         Nothing   -> playGame delays game
                                         Just game' -> do
                                                 clearScreen
-                                                printLevel . gsLevel $ game'
+                                                printLevel game'
                                                 let game''  = updateGameState game'
                                                 let game''' = checkIfRobotGotCrushed game' game''
                                                 threadDelay $ deMapUpdate delays
@@ -123,42 +119,48 @@ moveRobot game dir = do
         let lvl = gsLevel game
         nrp   <- newRobotPosition
         field <- lookup nrp $ lvMap lvl
-        let lmap = lvMap lvl
+        let lmap = lvMap lvl 
         case field of
                 Robot   | dir == UiWait
                                 -> return game
                 Robot   | dir == UiAbort
                                 -> return game  { gsProgress = Abort}
-                Empty           -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Robot . insert orp Empty $ lmap}
+                Empty           -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Empty lmap}
                                                 , gsRobotPosition = nrp
                                                 , gsMoves = gsMoves game + 1}
-                Earth           -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Robot . insert orp Empty $ lmap}
+                Earth           -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Empty lmap}
                                                 , gsRobotPosition = nrp, gsMoves = gsMoves game + 1}
-                Lambda          -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Robot . insert orp Empty $ lmap}
+                Lambda          -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Empty lmap}
                                                 , gsLambdasCollected = gsLambdasCollected game + 1
                                                 , gsRobotPosition = nrp
                                                 , gsMoves = gsMoves game + 1}
-                LiftOpen        -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Robot . insert orp Empty $ lmap}
+                LiftOpen        -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Empty lmap}
                                                 , gsProgress = Win
                                                 , gsRobotPosition = nrp
                                                 , gsMoves = gsMoves game + 1}
                 Rock    |  dir == UiRight
                         && lookup (rX+2, rY) (lvMap lvl) == Just Empty
-                                -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Robot . insert (rX+2, rY) Rock . insert orp Empty $ lmap}
+                                -> return game  { gsLevel = (gsLevel game) { lvMap = insert (rX+2, rY) Rock . insert nrp Empty $ lmap}
                                                 , gsRobotPosition = nrp
                                                 , gsMoves = gsMoves game + 1}
                 Rock    |  dir == UiLeft
                         && lookup (rX-2, rY) (lvMap lvl) == Just Empty
-                                -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Robot . insert (rX-2, rY) Rock . insert orp Empty  $ lmap}
+                                -> return game  { gsLevel = (gsLevel game) { lvMap = insert (rX-2, rY) Rock . insert nrp Empty $ lmap}
                                                 , gsRobotPosition = nrp
                                                 , gsMoves = gsMoves game + 1}
                 tc@(Trampoline _)
-                                -> return game  { gsLevel = (gsLevel game) { lvMap = insert roboPosTrampoline Robot . insert nrp Empty. insert orp Empty $ lmap}
+                                -> return game  { gsLevel = (gsLevel game) { lvMap = removeTargetIfNoOtherTrampsTargetIt . insert nrp Empty $ lmap
+                                                                           , lvTrampolines = lvlTrampsNew} -- TODO: update 2 remaining maps?
                                                 , gsRobotPosition = roboPosTrampoline
-                                                , gsMoves = gsMoves game + 1}
+                                                , gsMoves = gsMoves game + 1
+                                                }
                         where
+                        lvlTramps = lvTrampolines lvl
+                        lvlTrampsNew = delete tc lvlTramps
+                        target = unMaybe . lookup tc $ lvlTramps
+                        removeTargetIfNoOtherTrampsTargetIt = if (>=1) . size . M.filter (==target) $ lvlTrampsNew then id else insert roboPosTrampoline Empty
                         roboPosTrampoline = unMaybe $ do
-                                targ <- lookup tc (lvTrampolines (gsLevel game))
+                                targ <- lookup tc lvlTramps
                                 lookup targ (gsTargets game)
                 _               -> Nothing
         where
@@ -199,9 +201,10 @@ updateGameState gs = execState (updateLevel' keysToUpdate gs) gs
 
         updateLevelByPosition :: GameState -> GameState -> Position -> GameState
         updateLevelByPosition g g' pos
-                = case lookup pos (lvMap . gsLevel $ g) of
+                = case lookup pos lvlMap of
                         Nothing -> g'
                         Just e -> processObject g g' e pos
+                where lvlMap = insert (gsRobotPosition gs) Robot . lvMap . gsLevel $ g
 
 
 processObject :: GameState -> GameState -> Object -> Position -> GameState
@@ -229,7 +232,7 @@ processObject gs gs' o (x,y)
                 _       -> (gsLevel gs') { lvMap = lvl'}
                 }
         where
-        lvl  = lvMap . gsLevel $ gs
+        lvl  = insert (gsRobotPosition gs) Robot . lvMap . gsLevel $ gs
         lvl' = lvMap . gsLevel $ gs'
 
 

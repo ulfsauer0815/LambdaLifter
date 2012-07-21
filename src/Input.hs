@@ -51,8 +51,8 @@ askForContinue :: IO () -> IO () -> IO ()
 askForContinue actionAbort actionContinue = do
         setSGR [SetBlinkSpeed SlowBlink]
         putStrLn $ "Press " ++ showKeyMapping UiContinue ++ " to continue."
-        askForContinue'
         setSGR [Reset]
+        askForContinue'
         where
         askForContinue' = do
                 a <- getInput

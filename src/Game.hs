@@ -1,11 +1,12 @@
 module Game ( Object(..), Position, Level(..), GameProgress(..), GameState(..)
+            , isTrampoline, isTarget
             , charToObject, objectToChar, objectColor, printLevel )
 where
 
 import Data.List (sortBy)
-import Data.Map as M (Map, null, toList)
+import Data.Map as M (Map, null, toList, insert)
 import Control.Monad
-import System.Console.ANSI ( SGR(..), ConsoleLayer(..), ColorIntensity(..), Color(..), setSGR )
+import System.Console.ANSI ( setSGR, SGR(..), ConsoleLayer(..), ColorIntensity(..), Color(..) )
 
 -- Data structures
 
@@ -63,6 +64,14 @@ instance Show Object where
 
 -- Functions
 
+
+isTrampoline (Trampoline _)     = True
+isTrampoline _                  = False
+isTarget (Target _)             = True
+isTarget _                      = True
+
+
+
 objectToChar :: Object -> Char
 objectToChar o
         = case o of
@@ -114,13 +123,14 @@ objectColor o
 
 -- Print functions for data structures
 
-printLevel :: Level -> IO ()
-printLevel l = do
+printLevel :: GameState -> IO ()
+printLevel gs = do
         unless (M.null trams) $ do
                 putStrLn "Trampolines:"
                 mapM_ (putStrLn . show') $ toList trams
         printLevelMap l
         where
+        l = (gsLevel gs) { lvMap = insert (gsRobotPosition gs) Robot (lvMap . gsLevel $ gs) }
         trams = lvTrampolines l
         show' (tram, targ) = show tram ++ " -> " ++ show targ
 
