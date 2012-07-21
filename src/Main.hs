@@ -102,9 +102,9 @@ playGame delays game = do
           then do
                 dir <- getInput
                 case dir of
-                        MvAbort         -> return game {gsProgress = Abort}
-                        MvRestart       -> return game {gsProgress = Restart}
-                        MvSkip          -> return game {gsProgress = Skip}
+                        UiAbort         -> return game {gsProgress = Abort}
+                        UiRestart       -> return game {gsProgress = Restart}
+                        UiSkip          -> return game {gsProgress = Skip}
                         _               -> 
                                 case moveRobot game dir of
                                         Nothing   -> playGame delays game
@@ -125,9 +125,9 @@ moveRobot game dir = do
         field <- lookup nrp $ lvMap lvl
         let lmap = lvMap lvl
         case field of
-                Robot   | dir == MvWait
+                Robot   | dir == UiWait
                                 -> return game
-                Robot   | dir == MvAbort
+                Robot   | dir == UiAbort
                                 -> return game  { gsProgress = Abort}
                 Empty           -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Robot . insert orp Empty $ lmap}
                                                 , gsRobotPosition = nrp
@@ -142,12 +142,12 @@ moveRobot game dir = do
                                                 , gsProgress = Win
                                                 , gsRobotPosition = nrp
                                                 , gsMoves = gsMoves game + 1}
-                Rock    |  dir == MvRight
+                Rock    |  dir == UiRight
                         && lookup (rX+2, rY) (lvMap lvl) == Just Empty
                                 -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Robot . insert (rX+2, rY) Rock . insert orp Empty $ lmap}
                                                 , gsRobotPosition = nrp
                                                 , gsMoves = gsMoves game + 1}
-                Rock    |  dir == MvLeft
+                Rock    |  dir == UiLeft
                         && lookup (rX-2, rY) (lvMap lvl) == Just Empty
                                 -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Robot . insert (rX-2, rY) Rock . insert orp Empty  $ lmap}
                                                 , gsRobotPosition = nrp
@@ -165,10 +165,10 @@ moveRobot game dir = do
         unMaybe (Just a) = a
         unMaybe _        = error "unexpected Nothing value -> Trampoline may not have a Target" -- TODO: better error handling
         newRobotPosition= case dir of
-                MvUp            -> Just (rX   ,rY+1)
-                MvLeft          -> Just (rX-1 ,rY  )
-                MvDown          -> Just (rX   ,rY-1)
-                MvRight         -> Just (rX+1 ,rY  )
+                UiUp            -> Just (rX   ,rY+1)
+                UiLeft          -> Just (rX-1 ,rY  )
+                UiDown          -> Just (rX   ,rY-1)
+                UiRight         -> Just (rX+1 ,rY  )
                 _               -> Just (rX   ,rY  ) -- use Nothing to produce an invalid GameState
         orp@(rX, rY) = gsRobotPosition game
 

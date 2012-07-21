@@ -5,15 +5,15 @@ import Data.Char ( toLower )
 import System.Console.ANSI ( SGR(..), BlinkSpeed(..), setSGR )
 
 data UserInput
-        = MvLeft
-        | MvRight
-        | MvUp
-        | MvDown
-        | MvWait
-        | MvAbort
-        | MvRestart
-        | MvSkip
-        | MvContinue
+        = UiLeft
+        | UiRight
+        | UiUp
+        | UiDown
+        | UiWait
+        | UiAbort
+        | UiRestart
+        | UiSkip
+        | UiContinue
         deriving Eq
 
 -- Input processing
@@ -23,42 +23,42 @@ getInput = liftM processInput getChar
 
 showKeyMapping :: UserInput -> String
 showKeyMapping a = case a of
-        MvUp      -> "W"
-        MvLeft    -> "A"
-        MvDown    -> "S" 
-        MvRight   -> "D" 
-        MvAbort   -> "Q" 
-        MvRestart -> "R" 
-        MvSkip    -> "N"
-        MvWait    -> "E"
-        MvContinue-> "SPACE"  
+        UiUp      -> "W"
+        UiLeft    -> "A"
+        UiDown    -> "S" 
+        UiRight   -> "D" 
+        UiAbort   -> "Q" 
+        UiRestart -> "R" 
+        UiSkip    -> "N"
+        UiWait    -> "E"
+        UiContinue-> "SPACE"  
 
 
 processInput :: Char -> UserInput
 processInput c = case toLower c of
-        'w' -> MvUp
-        'a' -> MvLeft
-        's' -> MvDown
-        'd' -> MvRight
-        'q' -> MvAbort
-        'r' -> MvRestart
-        'n' -> MvSkip
-        ' ' -> MvContinue
-        _   -> MvWait
+        'w' -> UiUp
+        'a' -> UiLeft
+        's' -> UiDown
+        'd' -> UiRight
+        'q' -> UiAbort
+        'r' -> UiRestart
+        'n' -> UiSkip
+        ' ' -> UiContinue
+        _   -> UiWait
 
 
 askForContinue :: IO () -> IO () -> IO ()
 askForContinue actionAbort actionContinue = do
         setSGR [SetBlinkSpeed SlowBlink]
-        putStrLn $ "Press " ++ showKeyMapping MvContinue ++ " to continue."
+        putStrLn $ "Press " ++ showKeyMapping UiContinue ++ " to continue."
         askForContinue'
         setSGR [Reset]
         where
         askForContinue' = do
                 a <- getInput
                 case a of
-                        MvContinue -> actionContinue
-                        MvAbort    -> actionAbort
+                        UiContinue -> actionContinue
+                        UiAbort    -> actionAbort
                         _          -> askForContinue'
 
 
@@ -69,9 +69,9 @@ askForContinue_ = askForContinue (return ())
 printControls :: IO ()
 printControls = do
         putStrLn "Controls: "
-        putStrLn $ "  " ++ foldr (\e l -> showKeyMapping e ++ l) "" [MvUp,MvLeft,MvDown,MvRight]  ++ " to move"
-        putStrLn $ "  " ++ showKeyMapping MvWait                                                  ++ " to wait"
-        putStrLn $ "  " ++ showKeyMapping MvRestart                                               ++ " to restart"
-        putStrLn $ "  " ++ showKeyMapping MvSkip                                                  ++ " to skip the level"
-        putStrLn $ "  " ++ showKeyMapping MvAbort                                                 ++ " to quit"
+        putStrLn $ "  " ++ foldr (\e l -> showKeyMapping e ++ l) "" [UiUp,UiLeft,UiDown,UiRight]  ++ " to move"
+        putStrLn $ "  " ++ showKeyMapping UiWait                                                  ++ " to wait"
+        putStrLn $ "  " ++ showKeyMapping UiRestart                                               ++ " to restart"
+        putStrLn $ "  " ++ showKeyMapping UiSkip                                                  ++ " to skip the level"
+        putStrLn $ "  " ++ showKeyMapping UiAbort                                                 ++ " to quit"
         putStrLn ""
