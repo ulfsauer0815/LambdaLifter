@@ -16,6 +16,9 @@ import Persistence
 {--
 TODOs: 
  - add (global) scoring
+ - add feature to save the game
+        - probably needed: currentLevel(Map, Trampolines) + RobotPos
+        - extra: score/stats, loaded maps / finished maps
  - use state monad
 --}
 
@@ -172,7 +175,7 @@ moveRobot game dir = do
                 UiDown          -> Just (rX   ,rY-1)
                 UiRight         -> Just (rX+1 ,rY  )
                 _               -> Just (rX   ,rY  ) -- use Nothing to produce an invalid GameState
-        orp@(rX, rY) = gsRobotPosition game
+        (rX, rY) = gsRobotPosition game
 
 
 checkIfRobotGotCrushed :: GameState -> GameState -> GameState

@@ -65,11 +65,13 @@ instance Show Object where
 -- Functions
 
 
+isTrampoline :: Object -> Bool
 isTrampoline (Trampoline _)     = True
 isTrampoline _                  = False
+
+isTarget :: Object -> Bool
 isTarget (Target _)             = True
 isTarget _                      = True
-
 
 
 objectToChar :: Object -> Char
