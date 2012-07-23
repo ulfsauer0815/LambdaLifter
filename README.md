@@ -27,7 +27,7 @@ I don't know how to properly visualize the *Weather* extension, so i may skip th
 ##Installation
 Install required libraries
 
-    $ cabal install ansi-terminal
+    $ cabal install mtl ansi-terminal
 
 Compile source
 
