@@ -1,6 +1,7 @@
-module Game ( Object(..), Position, Level(..), GameProgress(..), GameState(..)
-            , isTrampoline, isTarget
-            , charToObject, objectToChar, objectColor, printLevel )
+module Game ( Object(..), Position, LevelMap, Level(..), GameProgress(..), GameState(..)
+            , isTrampoline, isTarget, isBeard
+            , charToObject, objectToChar, objectColor, printLevel
+            , ObjectInitValues(..) )
 where
 
 import Data.List (sortBy)
@@ -20,16 +21,20 @@ data Object
         | Earth
         | Trampoline Char
         | Target Char
+        | Beard Int
+        | Razor
         | Empty
         deriving (Eq, Ord)
 
         
 type Position = (Int, Int)
-
+type LevelMap = Map Position Object
 
 data Level = Level
-        { lvMap :: Map Position Object
+        { lvMap         :: LevelMap
         , lvTrampolines :: Map Object Object -- Trampoline -> Target
+        , lvGrowthRate  :: Int
+        , lvRazors      :: Int
         }
 
 
@@ -58,9 +63,13 @@ data GameState = GameState
         }
 
 
+data ObjectInitValues = ObjectInitValues
+        { oiBeardGrowthRate     :: Int
+        }
+
+
 instance Show Object where
         show = (:[]). objectToChar
-
 
 -- Functions
 
@@ -71,8 +80,11 @@ isTrampoline _                  = False
 
 isTarget :: Object -> Bool
 isTarget (Target _)             = True
-isTarget _                      = True
+isTarget _                      = False
 
+isBeard :: Object -> Bool
+isBeard (Beard _)              = True
+isBeard _                      = False
 
 objectToChar :: Object -> Char
 objectToChar o
@@ -86,11 +98,14 @@ objectToChar o
                 Earth           -> '.'
                 Trampoline c    -> c
                 Target c        -> c
+                --Beard _         -> 'W'
+                Beard i         -> head . show $ i
+                Razor           -> '!'
                 Empty           -> ' '
 
 
-charToObject :: Char -> Object
-charToObject c
+charToObject :: ObjectInitValues -> Char -> Object
+charToObject oiv c
         = case c of
                 'R'                     -> Robot
                 '#'                     -> Wall
@@ -102,9 +117,9 @@ charToObject c
                 ' '                     -> Empty
                 a | a `elem` ['A'..'I'] -> Trampoline a
                   | a `elem` ['0'..'9'] -> Target a
-                a   -> error $ "Cannot convert \"" ++ a : "\" to Object: no mapping found"
-
-
+                'W'                     -> Beard $ oiBeardGrowthRate oiv
+                '!'                     -> Razor
+                a   -> error $ "Cannot convert \"" ++ a : "\" to Object: no mapping found" ++ [a] ++ "aa"
 
 
 objectColor :: Object -> [SGR]
@@ -119,8 +134,9 @@ objectColor o
                 Earth           -> []
                 Trampoline _    -> return $ SetColor Foreground Vivid Magenta
                 Target _        -> return $ SetColor Foreground Dull Magenta
+                Beard _         -> []
+                Razor           -> []
                 Empty           -> []
-
 
 
 -- Print functions for data structures
