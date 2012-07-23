@@ -22,7 +22,7 @@ I don't know how to properly visualize the *Weather* extension, so i may skip th
 ###Currently missing
 - scoring (global)
 - saving game progress
-- not all extensions are implemented (see below)
+- not all extensions are implemented (see above)
 
 ##Installation
 Install required libraries
