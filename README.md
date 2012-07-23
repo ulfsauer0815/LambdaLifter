@@ -12,12 +12,10 @@ You can find more information on the official site.
 A few specification extensions were posted:
 - [Weather] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/weather.pdf) *(not implemented)*
 - [Trampolines] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/trampoline.pdf)
-- [Beards and Razors] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/beards.pdf) *(not implemented (yet))*
+- [Beards and Razors] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/beards.pdf)
 - [Higher Order Rocks] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/horocks.pdf) *(not implemented (yet))*
 
-The only extension implemented right now is *Trampolines*.
-I may implement *Beards and Razors* next, maybe *Higher Order Rocks* after that. 
-I don't know how to properly visualize the *Weather* extension, so i may skip that one.
+I may implement *Higher Order Rocks* next, I don't know how to properly visualize the *Weather* extension, so i may skip that one.
 
 ###Currently missing
 - scoring (global)

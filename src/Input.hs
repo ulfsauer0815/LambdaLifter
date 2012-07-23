@@ -14,6 +14,7 @@ data UserInput
         | UiRestart
         | UiSkip
         | UiContinue
+        | UiUseRazor
         deriving Eq
 
 -- Input processing
@@ -31,6 +32,7 @@ showKeyMapping a = case a of
         UiRestart -> "R" 
         UiSkip    -> "N"
         UiWait    -> "E"
+        UiUseRazor-> "X"
         UiContinue-> "SPACE"  
 
 
@@ -44,6 +46,7 @@ processInput c = case toLower c of
         'r' -> UiRestart
         'n' -> UiSkip
         ' ' -> UiContinue
+        'x' -> UiUseRazor
         _   -> UiWait
 
 
@@ -70,6 +73,7 @@ printControls :: IO ()
 printControls = do
         putStrLn "Controls: "
         putStrLn $ "  " ++ foldr (\e l -> showKeyMapping e ++ l) "" [UiUp,UiLeft,UiDown,UiRight]  ++ " to move"
+        putStrLn $ "  " ++ showKeyMapping UiUseRazor                                              ++ " to use the razor"
         putStrLn $ "  " ++ showKeyMapping UiWait                                                  ++ " to wait"
         putStrLn $ "  " ++ showKeyMapping UiRestart                                               ++ " to restart"
         putStrLn $ "  " ++ showKeyMapping UiSkip                                                  ++ " to skip the level"

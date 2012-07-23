@@ -23,11 +23,9 @@ TODOs:
 --}
 
 
-
 data Delays = Delays
         { deMapUpdate          :: Int
         }
-
 
 defaultDelays :: Delays
 defaultDelays = Delays
@@ -124,10 +122,13 @@ moveRobot game dir = do
         field <- lookup nrp $ lvMap lvl
         let lmap = lvMap lvl 
         case field of
-                Robot   | dir == UiWait
-                                -> return game
-                Robot   | dir == UiAbort
-                                -> return game  { gsProgress = Abort}
+                Empty   |  dir == UiUseRazor
+                    && lvRazors lvl > 0
+                                -> return game  { gsLevel = (gsLevel game) { lvMap = insertIntoAdjacentNonBeardCells nrp Empty lmap
+                                                                           , lvRazors = lvRazors lvl - 1}
+                                                , gsRobotPosition = nrp
+                                                , gsMoves = gsMoves game + 1
+                                                }
                 Empty           -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Empty lmap}
                                                 , gsRobotPosition = nrp
                                                 , gsMoves = gsMoves game + 1}
@@ -165,6 +166,18 @@ moveRobot game dir = do
                         roboPosTrampoline = unMaybe $ do
                                 targ <- lookup tc lvlTramps
                                 lookup targ (gsTargets game)
+                
+                Razor
+                                -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Empty lmap
+                                                                           , lvRazors = lvRazors lvl + 1}
+                                                , gsRobotPosition = nrp
+                                                , gsMoves = gsMoves game + 1
+                                                }
+                                                
+                _   | dir == UiWait
+                                -> return game
+                _   | dir == UiAbort
+                                -> return game  { gsProgress = Abort}
                 _               -> Nothing
         where
         unMaybe (Just a) = a
@@ -176,7 +189,18 @@ moveRobot game dir = do
                 UiRight         -> Just (rX+1 ,rY  )
                 _               -> Just (rX   ,rY  ) -- use Nothing to produce an invalid GameState
         (rX, rY) = gsRobotPosition game
-
+        
+        -- TODO: code duplication :( see below -> insertIntoAdjacentCells
+        insertIntoAdjacentNonBeardCells :: Position -> Object -> LevelMap -> LevelMap
+        insertIntoAdjacentNonBeardCells (x,y) obj lvlMap = insertObjectIntoPositions obj lvlMap (adjacentPositions x y)
+        
+        insertObjectIntoPositions ::  Object -> LevelMap -> [Position] -> LevelMap 
+        insertObjectIntoPositions obj = foldl (flip (flip insertIfBeard obj))
+        
+        insertIfBeard :: Position -> Object -> LevelMap -> LevelMap
+        insertIfBeard (x,y) obj lmap = if isBeard' $ lookup (x,y) lmap then insert (x,y) obj lmap else lmap
+        isBeard' = maybe False isBeard
+        
 
 checkIfRobotGotCrushed :: GameState -> GameState -> GameState
 checkIfRobotGotCrushed oldGs newGs
@@ -232,11 +256,29 @@ processObject gs gs' o (x,y)
                         -> (gsLevel gs') { lvMap = insert (x+1, y-1) Rock . insert (x,y) Empty $ lvl'}
                 LiftClosed | foldr' ((&&) . (/=Lambda)) True lvl
                         -> (gsLevel gs') { lvMap = insert (x,y) LiftOpen lvl'}
+                Beard g | g > 0
+                        -> (gsLevel gs') { lvMap = insert (x, y) (Beard $ g-1) lvl'}
+                Beard _
+                        -> (gsLevel gs') { lvMap = insert (x,y) beardInit . insertIntoAdjacentCells (x, y) beardInit $ lvl'}
                 _       -> (gsLevel gs') { lvMap = lvl'}
                 }
         where
         lvl  = insert (gsRobotPosition gs) Robot . lvMap . gsLevel $ gs
         lvl' = lvMap . gsLevel $ gs'
+        beardInit = Beard $ (lvGrowthRate . gsLevel) gs -1
+        
+        insertIntoAdjacentCells :: Position -> Object -> LevelMap -> LevelMap
+        insertIntoAdjacentCells (x',y') obj lvlMap = insertObjectIntoPositions obj lvlMap (adjacentPositions x' y')
+        
+        insertObjectIntoPositions ::  Object -> LevelMap -> [Position] -> LevelMap 
+        insertObjectIntoPositions obj = foldl (flip (flip insertIfEmpty obj))
+        
+        insertIfEmpty :: Position -> Object -> LevelMap -> LevelMap
+        insertIfEmpty (x',y') obj lmap = if lookup (x',y') lvl == Just Empty then insert (x',y') obj lmap else lmap -- note that lvl not lmap is used
+
+
+adjacentPositions :: Int -> Int -> [(Int,Int)]
+adjacentPositions x y = [(i,j) | i <- [x-1,x,x+1], j <- [y-1,y,y+1]]
 
 
 -- Main
