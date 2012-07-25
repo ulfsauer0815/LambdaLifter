@@ -10,17 +10,14 @@ You can find more information on the official site.
 ###Extensions
 
 A few specification extensions were posted:
-- [Weather] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/weather.pdf) *(not implemented)*
+- [Weather] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/weather.pdf) *(not implemented yet)*
 - [Trampolines] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/trampoline.pdf)
 - [Beards and Razors] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/beards.pdf)
-- [Higher Order Rocks] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/horocks.pdf) *(not implemented (yet))*
-
-I may implement *Higher Order Rocks* next, I don't know how to properly visualize the *Weather* extension, so i may skip that one.
+- [Higher Order Rocks] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/horocks.pdf)
 
 ###Currently missing
 - scoring (global)
 - saving game progress
-- not all extensions are implemented (see above)
 
 ##Installation
 Install required libraries

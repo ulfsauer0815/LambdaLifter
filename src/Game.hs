@@ -1,5 +1,5 @@
-module Game ( Object(..), Position, LevelMap, Level(..), GameProgress(..), GameState(..)
-            , isTrampoline, isTarget, isBeard
+module Game ( Object(..), RockType(..), Position, LevelMap, Level(..), GameProgress(..), GameState(..)
+            , isTrampoline, isTarget, isBeard, isRock, isLambda, isHigherOrderRock
             , charToObject, objectToChar, objectColor, printLevel
             , ObjectInitValues(..) )
 where
@@ -14,7 +14,7 @@ import System.Console.ANSI ( setSGR, SGR(..), ConsoleLayer(..), ColorIntensity(.
 data Object
         = Robot
         | Wall
-        | Rock
+        | Rock RockType
         | Lambda
         | LiftOpen
         | LiftClosed
@@ -26,6 +26,13 @@ data Object
         | Empty
         deriving (Eq, Ord)
 
+
+data RockType
+        = Simple
+        | HigherOrder
+        deriving (Eq, Ord)
+
+
         
 type Position = (Int, Int)
 type LevelMap = Map Position Object
@@ -35,6 +42,7 @@ data Level = Level
         , lvTrampolines :: Map Object Object -- Trampoline -> Target
         , lvGrowthRate  :: Int
         , lvRazors      :: Int
+        , lvLambdas     :: Int
         }
 
 
@@ -83,15 +91,28 @@ isTarget (Target _)             = True
 isTarget _                      = False
 
 isBeard :: Object -> Bool
-isBeard (Beard _)              = True
-isBeard _                      = False
+isBeard (Beard _)               = True
+isBeard _                       = False
+
+isRock :: Object -> Bool
+isRock (Rock _)                 = True
+isRock _                        = False
+
+isHigherOrderRock :: Object -> Bool
+isHigherOrderRock (Rock HigherOrder)    = True
+isHigherOrderRock _                     = False
+
+isLambda :: Object -> Bool
+isLambda Lambda                 = True
+isLambda _                      = False
 
 objectToChar :: Object -> Char
 objectToChar o
         = case o of
                 Robot           -> 'R'
                 Wall            -> '#'
-                Rock            -> '*' 
+                Rock Simple     -> '*'
+                Rock HigherOrder-> '@'
                 Lambda          -> '\\'
                 LiftClosed      -> 'L'
                 LiftOpen        -> 'O'
@@ -108,7 +129,8 @@ charToObject oiv c
         = case c of
                 'R'                     -> Robot
                 '#'                     -> Wall
-                '*'                     -> Rock
+                '*'                     -> Rock Simple
+                '@'                     -> Rock HigherOrder
                 '\\'                    -> Lambda
                 'L'                     -> LiftClosed
                 'O'                     -> LiftOpen
@@ -126,7 +148,7 @@ objectColor o
         = case o of
                 Robot           -> return $ SetColor Foreground Dull Blue
                 Wall            -> []
-                Rock            -> return $ SetColor Foreground Vivid Red 
+                Rock _          -> return $ SetColor Foreground Vivid Red
                 Lambda          -> return $ SetColor Foreground Dull Cyan
                 LiftClosed      -> return $ SetColor Foreground Dull Green
                 LiftOpen        -> return $ SetColor Foreground Vivid Green

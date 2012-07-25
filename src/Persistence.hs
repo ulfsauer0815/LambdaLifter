@@ -1,9 +1,9 @@
 module Persistence ( readLevelFile, extractTrampolinesFromMetadata ) where
-import Data.Map         as M ( Map, empty, fromList, insert )
+import Data.Map         as M ( Map, empty, fromList, insert, filter, size )
 import Prelude          as P hiding ( lookup )
 import Data.List        as L ( isPrefixOf )
 
-import Game ( LevelMap, Level(..), Object(..), charToObject, ObjectInitValues(..))
+import Game ( LevelMap, Level(..), Object(..), charToObject, ObjectInitValues(..), isLambda, isHigherOrderRock)
 import Data.Char (isDigit)
 
 readLevelFile :: FilePath -> IO Level
@@ -20,7 +20,8 @@ readLevelFile f = do
         return Level { lvMap            = lMap
                      , lvTrampolines    = lTrampolines
                      , lvGrowthRate     = lBeardGrowthRate
-                     , lvRazors         = lRazors }
+                     , lvRazors         = lRazors
+                     , lvLambdas        = M.size . M.filter (\o -> isLambda o || isHigherOrderRock o) $ lMap }
         where
         splitLevelAndMetadataString :: [String] -> ([String], [String])
         splitLevelAndMetadataString s = (tFst, P.filter (/= "") tSnd)

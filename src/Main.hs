@@ -142,14 +142,14 @@ moveRobot game dir = do
                                                 , gsProgress = Win
                                                 , gsRobotPosition = nrp
                                                 , gsMoves = gsMoves game + 1}
-                Rock    |  dir == UiRight
+                Rock rt |  dir == UiRight
                         && lookup (rX+2, rY) (lvMap lvl) == Just Empty
-                                -> return game  { gsLevel = (gsLevel game) { lvMap = insert (rX+2, rY) Rock . insert nrp Empty $ lmap}
+                                -> return game  { gsLevel = (gsLevel game) { lvMap = insert (rX+2, rY) (Rock rt) . insert nrp Empty $ lmap}
                                                 , gsRobotPosition = nrp
                                                 , gsMoves = gsMoves game + 1}
-                Rock    |  dir == UiLeft
+                Rock rt |  dir == UiLeft
                         && lookup (rX-2, rY) (lvMap lvl) == Just Empty
-                                -> return game  { gsLevel = (gsLevel game) { lvMap = insert (rX-2, rY) Rock . insert nrp Empty $ lmap}
+                                -> return game  { gsLevel = (gsLevel game) { lvMap = insert (rX-2, rY) (Rock rt) . insert nrp Empty $ lmap}
                                                 , gsRobotPosition = nrp
                                                 , gsMoves = gsMoves game + 1}
                 tc@(Trampoline _)
@@ -202,14 +202,15 @@ moveRobot game dir = do
         isBeard' = maybe False isBeard
         
 
-checkIfRobotGotCrushed :: GameState -> GameState -> GameState
+checkIfRobotGotCrushed :: GameState -> GameState -> GameState -- TODO: kind of dirty
 checkIfRobotGotCrushed oldGs newGs
-        = if aboveOld /= Just Rock && aboveNew == Just Rock
+        = if not (isRockOrLambda' aboveOld) && isRockOrLambda' aboveNew
             then
                 newGs {gsProgress = Loss}
             else
                 newGs
         where
+        isRockOrLambda' = maybe False (\o -> isRock o || isLambda o)
         aboveOld        = lookup (rX,rY+1) $ lvMap . gsLevel $ oldGs
         aboveNew        = lookup (rX,rY+1) $ lvMap . gsLevel $ newGs
         (rX,rY)         = gsRobotPosition oldGs
@@ -237,24 +238,24 @@ updateGameState gs = execState (updateLevel' keysToUpdate gs) gs
 processObject :: GameState -> GameState -> Object -> Position -> GameState
 processObject gs gs' o (x,y)
         = gs'   { gsLevel = case o of
-                Rock    | lookup (x, y-1)     lvl == Just Empty
-                        -> (gsLevel gs') { lvMap = insert (x, y-1) Rock . insert (x,y) Empty $ lvl'}
-                Rock    | lookup (x, y-1)     lvl == Just Rock &&
-                          lookup (x+1, y)     lvl == Just Empty &&
-                          lookup (x+1, y-1)   lvl == Just Empty
-                        -> (gsLevel gs') { lvMap = insert (x+1, y-1) Rock . insert (x,y) Empty $ lvl'}
-                Rock    | lookup (x, y-1)     lvl == Just Rock &&
-                          ( lookup (x+1, y)   lvl /= Just Empty ||
-                            lookup (x+1, y-1) lvl /= Just Empty
-                          ) &&
-                          lookup (x-1, y)     lvl == Just Empty &&
-                          lookup (x-1, y-1)   lvl == Just Empty
-                        -> (gsLevel gs') { lvMap = insert (x-1, y-1) Rock . insert (x,y) Empty $ lvl'}
-                Rock    | lookup (x, y-1)     lvl == Just Lambda &&
-                          lookup (x+1, y)     lvl == Just Empty &&
-                          lookup (x+1, y-1)   lvl == Just Empty
-                        -> (gsLevel gs') { lvMap = insert (x+1, y-1) Rock . insert (x,y) Empty $ lvl'}
-                LiftClosed | foldr' ((&&) . (/=Lambda)) True lvl
+                Rock rt |  lookup (x, y-1)     lvl == Just Empty
+                        -> (gsLevel gs') { lvMap = insertFallingRock (x, y-1) rt lvl . insert (x,y) Empty $ lvl'}
+                Rock rt |  (isRock' . lookup (x, y-1)) lvl
+                        && lookup (x+1, y)     lvl == Just Empty
+                        && lookup (x+1, y-1)   lvl == Just Empty
+                        -> (gsLevel gs') { lvMap = insertFallingRock (x+1, y-1) rt lvl . insert (x,y) Empty $ lvl'}
+                Rock rt |  (isRock' . lookup (x, y-1)) lvl
+                        && (  lookup (x+1, y)   lvl /= Just Empty
+                           || lookup (x+1, y-1) lvl /= Just Empty
+                           )
+                        && lookup (x-1, y)     lvl == Just Empty
+                        && lookup (x-1, y-1)   lvl == Just Empty
+                        -> (gsLevel gs') { lvMap = insert (x-1, y-1) (Rock rt) . insert (x,y) Empty $ lvl'}
+                Rock rt |  lookup (x, y-1)     lvl == Just Lambda
+                        && lookup (x+1, y)     lvl == Just Empty
+                        && lookup (x+1, y-1)   lvl == Just Empty
+                        -> (gsLevel gs') { lvMap = insertFallingRock (x+1, y-1) rt lvl . insert (x,y) Empty $ lvl'}
+                LiftClosed | gsLambdasCollected gs == (lvLambdas . gsLevel) gs 
                         -> (gsLevel gs') { lvMap = insert (x,y) LiftOpen lvl'}
                 Beard g | g > 0
                         -> (gsLevel gs') { lvMap = insert (x, y) (Beard $ g-1) lvl'}
@@ -263,6 +264,15 @@ processObject gs gs' o (x,y)
                 _       -> (gsLevel gs') { lvMap = lvl'}
                 }
         where
+        insertFallingRock :: Position -> RockType -> LevelMap -> LevelMap -> LevelMap
+        insertFallingRock pos@(rX,rY) rt l l'
+                = case lookup (rX,rY-1) l of
+                        Just Empty      -> insert pos (Rock rt) l'
+                        _               -> case rt of
+                                                Simple          -> insert pos (Rock rt) l'
+                                                HigherOrder     -> insert pos Lambda    l'
+        
+        isRock' = maybe False isRock
         lvl  = insert (gsRobotPosition gs) Robot . lvMap . gsLevel $ gs
         lvl' = lvMap . gsLevel $ gs'
         beardInit = Beard $ (lvGrowthRate . gsLevel) gs -1
