@@ -1,5 +1,5 @@
 module Game ( Object(..), RockType(..), Position, LevelMap, Level(..), GameProgress(..), GameState(..)
-            , isTrampoline, isTarget, isBeard, isRock, isLambda, isHigherOrderRock
+            , isTrampoline, isTarget, isBeard, isRock, isLambda, isHigherOrderRock, isSimpleRock, isEmpty, isWall, isEarth, isLiftOpen, isLiftClosed, isRazor
             , charToObject, objectToChar, objectColor, printLevel
             , ObjectInitValues(..) )
 where
@@ -81,6 +81,25 @@ instance Show Object where
 
 -- Functions
 
+isEmpty :: Object -> Bool
+isEmpty Empty                   = True
+isEmpty _                       = False
+
+isWall :: Object -> Bool
+isWall Wall                     = True
+isWall _                        = False
+
+isEarth :: Object -> Bool
+isEarth Earth                   = True
+isEarth _                       = False
+
+isLiftOpen :: Object -> Bool
+isLiftOpen LiftOpen             = True
+isLiftOpen _                    = False
+
+isLiftClosed :: Object -> Bool
+isLiftClosed LiftClosed         = True
+isLiftClosed _                  = False
 
 isTrampoline :: Object -> Bool
 isTrampoline (Trampoline _)     = True
@@ -94,17 +113,26 @@ isBeard :: Object -> Bool
 isBeard (Beard _)               = True
 isBeard _                       = False
 
+isRazor :: Object -> Bool
+isRazor Razor                   = True
+isRazor _                       = False
+
 isRock :: Object -> Bool
 isRock (Rock _)                 = True
 isRock _                        = False
+
+isLambda :: Object -> Bool
+isLambda Lambda                 = True
+isLambda _                      = False
 
 isHigherOrderRock :: Object -> Bool
 isHigherOrderRock (Rock HigherOrder)    = True
 isHigherOrderRock _                     = False
 
-isLambda :: Object -> Bool
-isLambda Lambda                 = True
-isLambda _                      = False
+isSimpleRock :: Object -> Bool
+isSimpleRock (Rock Simple)              = True
+isSimpleRock _                          = False
+
 
 objectToChar :: Object -> Char
 objectToChar o

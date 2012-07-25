@@ -1,7 +1,7 @@
 module Main where
 
 import Prelude          as P hiding ( lookup )
-import Data.Map         as M ( toList, keys, size, filter, lookup, insert, elemAt, foldr', delete )
+import Data.Map         as M ( toList, keys, size, filter, lookup, insert, elemAt, delete )
 import Control.Monad.State
 import Control.Concurrent ( threadDelay )
 import System.IO ( BufferMode(NoBuffering), stdin, hSetBuffering, hSetEcho )
