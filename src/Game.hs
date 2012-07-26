@@ -43,6 +43,9 @@ data Level = Level
         , lvGrowthRate  :: Int
         , lvRazors      :: Int
         , lvLambdas     :: Int
+        , lvWater       :: Int -- default  0
+        , lvFlooding    :: Int -- default  0
+        , lvWaterproof  :: Int -- default 10
         }
 
 

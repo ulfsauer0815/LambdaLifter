@@ -1,4 +1,4 @@
-module Persistence ( readLevelFile, extractTrampolinesFromMetadata ) where
+module Persistence ( readLevelFile ) where
 import Data.Map         as M ( Map, empty, fromList, insert, filter, size )
 import Prelude          as P hiding ( lookup )
 import Data.List        as L ( isPrefixOf )
@@ -9,18 +9,19 @@ import Data.Char (isDigit)
 readLevelFile :: FilePath -> IO Level
 readLevelFile f = do
         c  <- readFile f
-        let (lvlString, lvlMetadata) = splitLevelAndMetadataString . lines $ c
+        let (lvlString, lvlMetadata)    = splitLevelAndMetadataString . lines $ c
         -- Process metadata
-        let lTrampolines        = extractTrampolinesFromMetadata empty lvlMetadata
-        let lBeardGrowthRate    = extractBeardGrowthRateFromMetadata 25 lvlMetadata -- TODO: put constants somewhere else
-        let lRazors             = extractRazorsFromMetadata 0 lvlMetadata
-        let objectInitVals      = ObjectInitValues { oiBeardGrowthRate = lBeardGrowthRate }
+        let lBeardGrowthRate            = extractBeardGrowthRateFromMetadata    25      lvlMetadata -- TODO: put constants somewhere else
+        let objectInitVals              = ObjectInitValues { oiBeardGrowthRate = lBeardGrowthRate }
         -- Process level-string
-        let lMap                = levelStringToMap objectInitVals lvlString
+        let lMap                        = levelStringToMap objectInitVals lvlString
         return Level { lvMap            = lMap
-                     , lvTrampolines    = lTrampolines
+                     , lvTrampolines    = extractTrampolinesFromMetadata        empty   lvlMetadata
                      , lvGrowthRate     = lBeardGrowthRate
-                     , lvRazors         = lRazors
+                     , lvRazors         = extractRazorsFromMetadata             0       lvlMetadata
+                     , lvFlooding       = extractFloodingFromMetadata           0       lvlMetadata
+                     , lvWater          = extractWaterFromMetadata              0       lvlMetadata
+                     , lvWaterproof     = extractWaterproofFromMetadata         10      lvlMetadata
                      , lvLambdas        = M.size . M.filter (\o -> isLambda o || isHigherOrderRock o) $ lMap }
         where
         splitLevelAndMetadataString :: [String] -> ([String], [String])
@@ -37,6 +38,15 @@ extractBeardGrowthRateFromMetadata  = extractValueFromMetadata ("Growth " `isPre
 
 extractRazorsFromMetadata :: Int -> [String] -> Int
 extractRazorsFromMetadata  = extractValueFromMetadata ("Razors " `isPrefixOf`) (\_ -> read . P.filter isDigit)
+
+extractWaterFromMetadata :: Int -> [String] -> Int
+extractWaterFromMetadata  = extractValueFromMetadata ("Water " `isPrefixOf`) (\_ -> read . P.filter isDigit)
+
+extractFloodingFromMetadata :: Int -> [String] -> Int
+extractFloodingFromMetadata  = extractValueFromMetadata ("Flooding " `isPrefixOf`) (\_ -> read . P.filter isDigit)
+
+extractWaterproofFromMetadata :: Int -> [String] -> Int
+extractWaterproofFromMetadata  = extractValueFromMetadata ("Waterproof " `isPrefixOf`) (\_ -> read . P.filter isDigit)
 
 extractTrampolinesFromMetadata :: Map Object Object -> [String] -> Map Object Object
 extractTrampolinesFromMetadata = extractValueFromMetadata ("Trampoline " `isPrefixOf`) extract
