@@ -1,6 +1,5 @@
-module Input ( UserInput(..), getInput, showKeyMapping, printControls, askForContinue, askForContinue_) where
+module Input ( UserInput(..), getInput, showKeyMapping, showMoveHistory, printControls, askForContinue, askForContinue_) where
 
-import Control.Monad ( liftM )
 import Data.Char ( toLower )
 import System.Console.ANSI ( SGR(..), BlinkSpeed(..), setSGR )
 
@@ -19,35 +18,60 @@ data UserInput
 
 -- Input processing
 getInput :: IO UserInput
-getInput = liftM processInput getChar
+getInput = do
+        c <- getChar
+        let input = processInput c
+        case input of
+                Nothing -> getInput
+                Just input' -> return input'
 
 
 showKeyMapping :: UserInput -> String
 showKeyMapping a = case a of
         UiUp      -> "W"
         UiLeft    -> "A"
-        UiDown    -> "S" 
-        UiRight   -> "D" 
-        UiAbort   -> "Q" 
-        UiRestart -> "R" 
+        UiDown    -> "S"
+        UiRight   -> "D"
+        UiAbort   -> "Q"
+        UiRestart -> "R"
         UiSkip    -> "N"
         UiWait    -> "E"
         UiUseRazor-> "X"
-        UiContinue-> "SPACE"  
+        UiContinue-> "SPACE"
 
 
-processInput :: Char -> UserInput
+showKeyMappingOfficial :: UserInput -> Char
+showKeyMappingOfficial a = case a of
+        UiUp      -> 'U'
+        UiLeft    -> 'L'
+        UiDown    -> 'D'
+        UiRight   -> 'R'
+        UiWait    -> 'W'
+        UiAbort   -> 'A'
+        UiUseRazor-> 'S'
+        
+        -- TODO: check
+        UiRestart -> 'a'
+        UiSkip    -> 'a'
+        UiContinue-> 'a'
+
+showMoveHistory :: [UserInput] -> String
+showMoveHistory = map showKeyMappingOfficial  . reverse
+
+
+processInput :: Char -> Maybe UserInput
 processInput c = case toLower c of
-        'w' -> UiUp
-        'a' -> UiLeft
-        's' -> UiDown
-        'd' -> UiRight
-        'q' -> UiAbort
-        'r' -> UiRestart
-        'n' -> UiSkip
-        ' ' -> UiContinue
-        'x' -> UiUseRazor
-        _   -> UiWait
+        'w' -> return UiUp
+        'a' -> return UiLeft
+        's' -> return UiDown
+        'd' -> return UiRight
+        'e' -> return UiWait
+        'q' -> return UiAbort
+        'r' -> return UiRestart
+        'n' -> return UiSkip
+        ' ' -> return UiContinue
+        'x' -> return UiUseRazor
+        _   -> Nothing
 
 
 askForContinue :: IO () -> IO () -> IO ()

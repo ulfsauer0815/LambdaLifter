@@ -57,6 +57,7 @@ createGame lvl = do
                 , gsProgress            = Running
                 , gsLambdasCollected    = 0
                 , gsMoves               = 0
+                , gsMoveHistory         = [] -- head is the most recent move
                 }
         where
         lmap   = lvMap lvl
@@ -88,9 +89,13 @@ startGames delays games@(game:nextGames) = do
                                         askForContinue_ restartLevel
                 Win             -> do
                                         putStrLn "You won! Congratulations!"
+                                        putStrLn $ "Your route: " ++ showMoveHistory (gsMoveHistory game')
                                         askForContinue_ (startGames delays nextGames)
                 Skip            -> startGames delays (nextGames ++ [game])
-                Abort           -> putStrLn "You abandoned Marvin! :'("
+                Abort           -> do
+                                        putStrLn "You abandoned Marvin! :'("
+                                        putStrLn $ "Your route: " ++ showMoveHistory (gsMoveHistory game')
+                
                 Running         -> error "Invalid state"
         where
         restartLevel = startGames delays games
@@ -139,36 +144,44 @@ moveRobot game dir = do
                                                                            , lvRazors = lvRazors lvl - 1}
                                                 , gsRobotPosition = nrp
                                                 , gsMoves = gsMoves game + 1
-                                                }
-                Empty           -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Empty lmap}
+                                                , gsMoveHistory = addMove dir}
+                Empty   | dir /= UiUseRazor
+                                -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Empty lmap}
                                                 , gsRobotPosition = nrp
-                                                , gsMoves = gsMoves game + 1}
+                                                , gsMoves = gsMoves game + 1
+                                                , gsMoveHistory = addMove dir}
                 Earth           -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Empty lmap}
-                                                , gsRobotPosition = nrp, gsMoves = gsMoves game + 1}
+                                                , gsRobotPosition = nrp
+                                                , gsMoves = gsMoves game + 1
+                                                , gsMoveHistory = addMove dir}
                 Lambda          -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Empty lmap}
                                                 , gsLambdasCollected = gsLambdasCollected game + 1
                                                 , gsRobotPosition = nrp
-                                                , gsMoves = gsMoves game + 1}
+                                                , gsMoves = gsMoves game + 1
+                                                , gsMoveHistory = addMove dir}
                 LiftOpen        -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Empty lmap}
                                                 , gsProgress = Win
                                                 , gsRobotPosition = nrp
-                                                , gsMoves = gsMoves game + 1}
+                                                , gsMoves = gsMoves game + 1
+                                                , gsMoveHistory = addMove dir}
                 Rock rt |  dir == UiRight
                         && lookup (rX+2, rY) (lvMap lvl) == Just Empty
                                 -> return game  { gsLevel = (gsLevel game) { lvMap = insert (rX+2, rY) (Rock rt) . insert nrp Empty $ lmap}
                                                 , gsRobotPosition = nrp
-                                                , gsMoves = gsMoves game + 1}
+                                                , gsMoves = gsMoves game + 1
+                                                , gsMoveHistory = addMove dir}
                 Rock rt |  dir == UiLeft
                         && lookup (rX-2, rY) (lvMap lvl) == Just Empty
                                 -> return game  { gsLevel = (gsLevel game) { lvMap = insert (rX-2, rY) (Rock rt) . insert nrp Empty $ lmap}
                                                 , gsRobotPosition = nrp
-                                                , gsMoves = gsMoves game + 1}
+                                                , gsMoves = gsMoves game + 1
+                                                , gsMoveHistory = addMove dir}
                 tc@(Trampoline _)
                                 -> return game  { gsLevel = (gsLevel game) { lvMap = removeTargetIfNoOtherTrampsTargetIt . insert nrp Empty $ lmap
                                                                            , lvTrampolines = lvlTrampsNew} -- TODO: update 2 remaining maps?
                                                 , gsRobotPosition = roboPosTrampoline
                                                 , gsMoves = gsMoves game + 1
-                                                }
+                                                , gsMoveHistory = addMove dir}
                         where
                         lvlTramps = lvTrampolines lvl
                         lvlTrampsNew = delete tc lvlTramps
@@ -183,7 +196,7 @@ moveRobot game dir = do
                                                                            , lvRazors = lvRazors lvl + 1}
                                                 , gsRobotPosition = nrp
                                                 , gsMoves = gsMoves game + 1
-                                                }
+                                                , gsMoveHistory = addMove dir}
                                                 
                 _   | dir == UiWait
                                 -> return game
@@ -211,6 +224,8 @@ moveRobot game dir = do
         insertIfBeard :: Position -> Object -> LevelMap -> LevelMap
         insertIfBeard (x,y) obj lmap = if isBeard' $ lookup (x,y) lmap then insert (x,y) obj lmap else lmap
         isBeard' = maybe False isBeard
+        
+        addMove m = m : gsMoveHistory game
 
 
  -- TODO: kind of dirty

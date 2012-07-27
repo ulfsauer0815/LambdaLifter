@@ -9,6 +9,8 @@ import Data.Map as M (Map, null, toList, insert)
 import Control.Monad
 import System.Console.ANSI ( setSGR, SGR(..), ConsoleLayer(..), ColorIntensity(..), Color(..) )
 
+import Input ( UserInput )
+
 -- Data structures
 
 data Object
@@ -79,6 +81,7 @@ data GameState = GameState
         , gsProgress            :: GameProgress
         , gsLambdasCollected    :: Int
         , gsMoves               :: Int
+        , gsMoveHistory         :: [UserInput]
         }
 
 
@@ -211,11 +214,14 @@ printLevel gs = do
                 mapM_ (putStrLn . show') $ toList trams
         when (airLeft <= lvWaterproof l) $
                 putStrLn $ "Air: " ++ show airLeft
+        when (razors > 0) $
+                putStrLn $ "Razors: " ++ show razors
         printLevelMap l
         where
         l                       = (gsLevel gs) { lvMap = insert (gsRobotPosition gs) Robot (lvMap . gsLevel $ gs) }
         trams                   = lvTrampolines l
         airLeft                 = gsAirLeft gs
+        razors                  = lvRazors l
         show' (tram, targ)      = show tram ++ " -> " ++ show targ
 
 
