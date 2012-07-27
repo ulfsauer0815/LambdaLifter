@@ -1,7 +1,7 @@
-module Game ( Object(..), RockType(..), Position, LevelMap, Level(..), GameProgress(..), GameState(..)
+module Game ( Object(..), RockType(..), Position, LevelMap, Level(..), GameProgress(..), LossReason(..), GameState(..)
             , isTrampoline, isTarget, isBeard, isRock, isLambda, isHigherOrderRock, isSimpleRock, isEmpty, isWall, isEarth, isLiftOpen, isLiftClosed, isRazor
             , charToObject, objectToChar, objectColor, printLevel
-            , ObjectInitValues(..) )
+            , ObjectInitValues(..))
 where
 
 import Data.List (sortBy)
@@ -52,10 +52,16 @@ data Level = Level
 data GameProgress
         = Running
         | Win
-        | Loss
+        | Loss LossReason
         | Abort
         | Restart
         | Skip
+        deriving Eq
+
+
+data LossReason
+        = FallingRock
+        | Drowning
         deriving Eq
 
 
@@ -64,6 +70,8 @@ data GameState = GameState
         , gsLevelDimensions     :: Position -- TODO: necessary?
         , gsRobotPosition       :: Position
         , gsLiftPosition        :: Position
+        , gsTick                :: Int
+        , gsAirLeft             :: Int
         
         , gsTargets             :: Map Object Position   -- Target -> Position of Target
         , gsTargetSources       :: Map Object [Position] -- Target -> [Position of Trampoline]
@@ -191,6 +199,9 @@ objectColor o
                 Empty           -> []
 
 
+waterColor :: [SGR]
+waterColor = return $ SetColor Foreground Vivid Blue
+
 -- Print functions for data structures
 
 printLevel :: GameState -> IO ()
@@ -198,26 +209,29 @@ printLevel gs = do
         unless (M.null trams) $ do
                 putStrLn "Trampolines:"
                 mapM_ (putStrLn . show') $ toList trams
+        when (airLeft <= lvWaterproof l) $
+                putStrLn $ "Air: " ++ show airLeft
         printLevelMap l
         where
-        l = (gsLevel gs) { lvMap = insert (gsRobotPosition gs) Robot (lvMap . gsLevel $ gs) }
-        trams = lvTrampolines l
-        show' (tram, targ) = show tram ++ " -> " ++ show targ
+        l                       = (gsLevel gs) { lvMap = insert (gsRobotPosition gs) Robot (lvMap . gsLevel $ gs) }
+        trams                   = lvTrampolines l
+        airLeft                 = gsAirLeft gs
+        show' (tram, targ)      = show tram ++ " -> " ++ show targ
 
 
 printLevelMap :: Level -> IO ()
 printLevelMap l = (sequence_ . printAList . levelToSortedAList) l >> setSGR [ Reset ]
         where
-        print' o = printNoNl' o >> putStrLn ""
-        printNoNl' o = do
-                setSGR (objectColor o)
+        print' o y = printNoNl' o y >> putStrLn ""
+        printNoNl' o y = do
+                if y > lvWater l then setSGR (objectColor o) else setSGR waterColor 
                 putChar . objectToChar $ o
         
         printAList :: [(Position, Object)] -> [IO ()]
-        printAList ls@(((x0,_),o):((x1,_),_):_)
-                | x1 < x0 = print' o : (printAList . tail) ls
-                | otherwise = printNoNl' o : (printAList . tail) ls
-        printAList (((_,_),o):xs) = printNoNl' o : printAList xs
+        printAList ls@(((x0,y0),o):((x1,_),_):_)
+                | x1 < x0 = print' o y0 : (printAList . tail) ls
+                | otherwise = printNoNl' o y0 : (printAList . tail) ls
+        printAList (((_,y0),o):xs) = printNoNl' o y0 : printAList xs
         printAList [] = [putStrLn ""]
 
         levelToSortedAList :: Level -> [(Position, Object)]

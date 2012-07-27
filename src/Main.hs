@@ -48,6 +48,8 @@ createGame lvl = do
                 , gsLevelDimensions     = lvlDims
                 , gsRobotPosition       = roboPos
                 , gsLiftPosition        = liftPos
+                , gsTick                = 0
+                , gsAirLeft             = lvWaterproof lvl + 1
                 
                 , gsTargets             = revertMap targs
                 , gsTargetSources       = targetSourcePositions
@@ -77,16 +79,19 @@ startGames delays games@(game:nextGames) = do
         putStrLn $ "Moves: "             ++ show (gsMoves game')
         
         case gsProgress game' of
-                Restart   -> restartLevel
-                Loss      -> do
-                                putStrLn "You got crushed by rocks! :("
-                                askForContinue_ restartLevel
-                Win       -> do
-                                putStrLn "You won! Congratulations!"
-                                askForContinue_ (startGames delays nextGames)
-                Skip      -> startGames delays (nextGames ++ [game])
-                Abort     -> putStrLn "You abandoned Marvin! :'("
-                Running   -> error "Invalid state"
+                Restart         -> restartLevel
+                Loss reason     -> do
+                                        let msg = case reason of
+                                                        FallingRock     -> "You got crushed by rocks! :("
+                                                        Drowning        -> "You drowned! :("
+                                        putStrLn msg
+                                        askForContinue_ restartLevel
+                Win             -> do
+                                        putStrLn "You won! Congratulations!"
+                                        askForContinue_ (startGames delays nextGames)
+                Skip            -> startGames delays (nextGames ++ [game])
+                Abort           -> putStrLn "You abandoned Marvin! :'("
+                Running         -> error "Invalid state"
         where
         restartLevel = startGames delays games
 
@@ -108,10 +113,16 @@ playGame delays game = do
                                         Just game' -> do
                                                 clearScreen
                                                 printLevel game'
-                                                let game''  = updateGameState game'
-                                                let game''' = checkIfRobotGotCrushed game' game''
-                                                threadDelay $ deMapUpdate delays
-                                                playGame delays game'''
+                                                -- no update after a win
+                                                --    otherwise a rock may fall onto the OpenLift the Robot just stepped into, or
+                                                --    or the Robot may drown after stepping into the OpenLift 
+                                                if gsProgress game' == Win
+                                                  then playGame delays game'
+                                                  else do
+                                                        let game''   = updateGameState game'
+                                                        let game'''  = checkIfRobotGotCrushed game' game'' -- TODO: check in updateGameState
+                                                        threadDelay $ deMapUpdate delays
+                                                        playGame delays game'''
           else return game
 
 
@@ -200,15 +211,15 @@ moveRobot game dir = do
         insertIfBeard :: Position -> Object -> LevelMap -> LevelMap
         insertIfBeard (x,y) obj lmap = if isBeard' $ lookup (x,y) lmap then insert (x,y) obj lmap else lmap
         isBeard' = maybe False isBeard
-        
 
-checkIfRobotGotCrushed :: GameState -> GameState -> GameState -- TODO: kind of dirty
+
+ -- TODO: kind of dirty
+checkIfRobotGotCrushed :: GameState -> GameState -> GameState
 checkIfRobotGotCrushed oldGs newGs
-        = if not (isRockOrLambda' aboveOld) && isRockOrLambda' aboveNew
-            then
-                newGs {gsProgress = Loss}
-            else
-                newGs
+        = if not (isRockOrLambda' aboveOld)
+             && isRockOrLambda' aboveNew
+            then newGs {gsProgress = Loss FallingRock}
+            else newGs
         where
         isRockOrLambda' = maybe False (\o -> isRock o || isLambda o)
         aboveOld        = lookup (rX,rY+1) $ lvMap . gsLevel $ oldGs
@@ -217,8 +228,26 @@ checkIfRobotGotCrushed oldGs newGs
 
 
 updateGameState :: GameState -> GameState
-updateGameState gs = execState (updateLevel' keysToUpdate gs) gs
+updateGameState gs
+        = updatedGS
+                { gsTick        = thisTick
+                , gsProgress    = if gsAirLeft updatedGS < 0
+                                    then Loss Drowning
+                                    else gsProgress updatedGS -- robot may drown
+                , gsLevel
+                        = (gsLevel updatedGS)
+                                { lvWater       = newWater
+                                }
+                }
         where
+        thisTick     = gsTick updatedGS + 1
+        gs'          = gs { gsLevel = (gsLevel gs) { lvWater = newWater } }
+        updatedGS    = execState (updateLevel' keysToUpdate gs') gs -- gs instead of gs' -> robot underwater after map update instead of instantly 
+        updatedLvl   = gsLevel updatedGS
+        water        = lvWater updatedLvl
+        newWater     = water + if flooding /= 0 && thisTick `mod` flooding == 0 then 1 else 0
+        flooding     = lvFlooding updatedLvl
+        
         updateLevel' :: [Position] -> GameState -> State GameState GameState
         updateLevel' [] _ = get
         updateLevel' (pos:poss) lvl = do
@@ -237,33 +266,38 @@ updateGameState gs = execState (updateLevel' keysToUpdate gs) gs
 
 processObject :: GameState -> GameState -> Object -> Position -> GameState
 processObject gs gs' o (x,y)
-        = gs'   { gsLevel = case o of
+        = case o of
                 Rock rt |  lookup (x, y-1)     lvl == Just Empty
-                        -> (gsLevel gs') { lvMap = insertFallingRock (x, y-1) rt lvl . insert (x,y) Empty $ lvl'}
+                        -> modifyLevelMap $ insertFallingRock (x, y-1) rt lvl . insert (x,y) Empty $ lvl'
                 Rock rt |  (isRock' . lookup (x, y-1)) lvl
                         && lookup (x+1, y)     lvl == Just Empty
                         && lookup (x+1, y-1)   lvl == Just Empty
-                        -> (gsLevel gs') { lvMap = insertFallingRock (x+1, y-1) rt lvl . insert (x,y) Empty $ lvl'}
+                        -> modifyLevelMap $ insertFallingRock (x+1, y-1) rt lvl . insert (x,y) Empty $ lvl'
                 Rock rt |  (isRock' . lookup (x, y-1)) lvl
                         && (  lookup (x+1, y)   lvl /= Just Empty
                            || lookup (x+1, y-1) lvl /= Just Empty
                            )
                         && lookup (x-1, y)     lvl == Just Empty
                         && lookup (x-1, y-1)   lvl == Just Empty
-                        -> (gsLevel gs') { lvMap = insert (x-1, y-1) (Rock rt) . insert (x,y) Empty $ lvl'}
+                        -> modifyLevelMap $ insert (x-1, y-1) (Rock rt) . insert (x,y) Empty $ lvl'
                 Rock rt |  lookup (x, y-1)     lvl == Just Lambda
                         && lookup (x+1, y)     lvl == Just Empty
                         && lookup (x+1, y-1)   lvl == Just Empty
-                        -> (gsLevel gs') { lvMap = insertFallingRock (x+1, y-1) rt lvl . insert (x,y) Empty $ lvl'}
+                        -> modifyLevelMap $ insertFallingRock (x+1, y-1) rt lvl . insert (x,y) Empty $ lvl'
                 LiftClosed | gsLambdasCollected gs == (lvLambdas . gsLevel) gs 
-                        -> (gsLevel gs') { lvMap = insert (x,y) LiftOpen lvl'}
+                        -> modifyLevelMap $ insert (x,y) LiftOpen lvl'
+                -- Beards and Razors extension
                 Beard g | g > 0
-                        -> (gsLevel gs') { lvMap = insert (x, y) (Beard $ g-1) lvl'}
+                        -> modifyLevelMap $ insert (x, y) (Beard $ g-1) lvl'
                 Beard _
-                        -> (gsLevel gs') { lvMap = insert (x,y) beardInit . insertIntoAdjacentCells (x, y) beardInit $ lvl'}
-                _       -> (gsLevel gs') { lvMap = lvl'}
-                }
+                        -> modifyLevelMap $ insert (x,y) beardInit . insertIntoAdjacentCells (x, y) beardInit $ lvl'
+                -- Flooding extension
+                Robot   -> gs' { gsAirLeft = if (lvWater . gsLevel) gs >= y then airLeft - 1 else (lvWaterproof . gsLevel) gs + 1}
+
+                _       -> modifyLevelMap lvl'
         where
+        modifyLevelMap lvlMap = gs' { gsLevel = (gsLevel gs') { lvMap = lvlMap}}
+        
         insertFallingRock :: Position -> RockType -> LevelMap -> LevelMap -> LevelMap
         insertFallingRock pos@(rX,rY) rt l l'
                 = case lookup (rX,rY-1) l of
@@ -272,6 +306,7 @@ processObject gs gs' o (x,y)
                                                 Simple          -> insert pos (Rock rt) l'
                                                 HigherOrder     -> insert pos Lambda    l'
         
+        airLeft = gsAirLeft gs'
         isRock' = maybe False isRock
         lvl  = insert (gsRobotPosition gs) Robot . lvMap . gsLevel $ gs
         lvl' = lvMap . gsLevel $ gs'

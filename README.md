@@ -10,7 +10,7 @@ You can find more information on the official site.
 ###Extensions
 
 A few specification extensions were posted:
-- [Weather] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/weather.pdf) *(not implemented yet)*
+- [Weather] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/weather.pdf)
 - [Trampolines] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/trampoline.pdf)
 - [Beards and Razors] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/beards.pdf)
 - [Higher Order Rocks] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/horocks.pdf)
