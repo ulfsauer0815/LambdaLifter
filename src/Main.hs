@@ -89,6 +89,7 @@ startGames delays games@(game:nextGames) = do
                                         askForContinue_ restartLevel
                 Win             -> do
                                         putStrLn "You won! Congratulations!"
+                                        putStrLn $ "Points: " ++ show (calculatePoints game')
                                         putStrLn $ "Your route: " ++ showMoveHistory (gsMoveHistory game')
                                         askForContinue_ (startGames delays nextGames)
                 Skip            -> startGames delays (nextGames ++ [game])
@@ -99,6 +100,19 @@ startGames delays games@(game:nextGames) = do
                 Running         -> error "Invalid state"
         where
         restartLevel = startGames delays games
+
+
+calculatePoints :: GameState -> Int
+calculatePoints gs
+        = lambdas             * 25
+        + moves               * (-1)
+        + isWon     * lambdas * 50
+        + isAborted * lambdas * 25
+        where
+        isWon           = fromEnum $ gsProgress gs == Win
+        isAborted       = fromEnum $ gsProgress gs == Abort
+        moves           = gsMoves gs
+        lambdas         = gsLambdasCollected gs
 
 
 playGame :: Delays -> GameState -> IO GameState
