@@ -74,8 +74,9 @@ createGame lvl = do
 startGames :: Delays -> [GameState] -> IO ()
 startGames _ [] = putStrLn "You finished all levels! :)"
 startGames delays games@(game:nextGames) = do
-        game' <- playGame delays game
-        let points = calculatePoints game'
+        game' <- playGame Nothing delays game
+        let points      = calculatePoints game'
+        let moveHistory = gsMoveHistory game' 
         
         case gsProgress game' of
                 Restart         -> restartLevel
@@ -85,18 +86,20 @@ startGames delays games@(game:nextGames) = do
                                                         Drowning        -> "You drowned! :("
                                         putStrLn msg
                                         putStrLn $ "Points: " ++ show points
-                                        putStrLn $ "Your route: " ++ showMoveHistory (gsMoveHistory game')
+                                        putStrLn $ "Your route: " ++ showMoveHistory moveHistory
                                         askForContinue_ restartLevel
                 Win             -> do
+                                        -- Instant Replay
+                                        _ <- playGame (Just $ reverse moveHistory) delays game
                                         putStrLn "You won! Congratulations!"
                                         putStrLn $ "Points: " ++ show points
-                                        putStrLn $ "Your route: " ++ showMoveHistory (gsMoveHistory game')
+                                        putStrLn $ "Your route: " ++ showMoveHistory moveHistory
                                         askForContinue_ (startGames delays nextGames)
                 Skip            -> startGames delays (nextGames ++ [game])
                 Abort           -> do
                                         putStrLn "You abandoned Marvin! :'("
                                         putStrLn $ "Points: " ++ show points
-                                        putStrLn $ "Your route: " ++ showMoveHistory (gsMoveHistory game')
+                                        putStrLn $ "Your route: " ++ showMoveHistory moveHistory
                 
                 Running         -> error "Invalid state"
         where
@@ -116,20 +119,24 @@ calculatePoints gs
         lambdas         = gsLambdasCollected gs
 
 
-playGame :: Delays -> GameState -> IO GameState
-playGame delays game = do
+playGame :: Maybe [UserInput] -> Delays -> GameState -> IO GameState
+playGame (Just []) _ game = return game {gsProgress = Abort}
+playGame mMoves delays game = do
         clearScreen
         printLevel game
         if gsProgress game == Running
           then do
-                dir <- getInput
+                dir <- case mMoves of
+                  Nothing       -> getInput
+                  Just (x:_)    -> return x
+                  Just []       -> error "playGame with Just [] - cannot happen"
                 case dir of
                         UiAbort         -> return game {gsProgress = Abort}
                         UiRestart       -> return game {gsProgress = Restart}
                         UiSkip          -> return game {gsProgress = Skip}
                         _               -> 
                                 case moveRobot game dir of
-                                        Nothing   -> playGame delays game
+                                        Nothing   -> playGame mMoves delays game
                                         Just game' -> do
                                                 clearScreen
                                                 printLevel game'
@@ -137,13 +144,19 @@ playGame delays game = do
                                                 --    otherwise a rock may fall onto the OpenLift the Robot just stepped into, or
                                                 --    or the Robot may drown after stepping into the OpenLift 
                                                 if gsProgress game' == Win
-                                                  then playGame delays game'
+                                                  then playGame tailMoves delays game'
                                                   else do
                                                         let game''   = updateGameState game'
                                                         let game'''  = checkIfRobotGotCrushed game' game'' -- TODO: check in updateGameState
                                                         threadDelay $ deMapUpdate delays
-                                                        playGame delays game'''
+                                                        playGame tailMoves delays game'''
           else return game
+        
+        where
+        tailMoves = case mMoves of
+                Just (_:xs) -> Just xs
+                Just []     -> Just []
+                Nothing     -> Nothing
 
 
 moveRobot :: GameState -> UserInput -> Maybe GameState -- TODO: Maybe unnecessary

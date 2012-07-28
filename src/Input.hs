@@ -1,6 +1,7 @@
 module Input ( UserInput(..), getInput, showKeyMapping, showMoveHistory, printControls, askForContinue, askForContinue_) where
 
 import Data.Char ( toLower )
+import Data.Maybe ( mapMaybe )
 import System.Console.ANSI ( SGR(..), BlinkSpeed(..), setSGR )
 
 data UserInput
@@ -16,7 +17,9 @@ data UserInput
         | UiUseRazor
         deriving Eq
 
+
 -- Input processing
+
 getInput :: IO UserInput
 getInput = do
         c <- getChar
@@ -40,23 +43,23 @@ showKeyMapping a = case a of
         UiContinue-> "SPACE"
 
 
-showKeyMappingOfficial :: UserInput -> Char
+showKeyMappingOfficial :: UserInput -> Maybe Char
 showKeyMappingOfficial a = case a of
-        UiUp      -> 'U'
-        UiLeft    -> 'L'
-        UiDown    -> 'D'
-        UiRight   -> 'R'
-        UiWait    -> 'W'
-        UiAbort   -> 'A'
-        UiUseRazor-> 'S'
+        UiUp      -> return 'U'
+        UiLeft    -> return 'L'
+        UiDown    -> return 'D'
+        UiRight   -> return 'R'
+        UiWait    -> return 'W'
+        UiAbort   -> return 'A'
+        UiUseRazor-> return 'S'
         
         -- TODO: check
-        UiRestart -> 'a'
-        UiSkip    -> 'a'
-        UiContinue-> 'a'
+        UiRestart -> Nothing
+        UiSkip    -> Nothing
+        UiContinue-> Nothing
 
 showMoveHistory :: [UserInput] -> String
-showMoveHistory = map showKeyMappingOfficial  . reverse
+showMoveHistory = mapMaybe showKeyMappingOfficial  . reverse
 
 
 processInput :: Char -> Maybe UserInput

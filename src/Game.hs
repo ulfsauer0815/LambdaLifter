@@ -212,7 +212,7 @@ printLevel gs = do
         unless (M.null trams) $ do
                 putStrLn "Trampolines:"
                 mapM_ (putStrLn . show') $ toList trams
-        when (airLeft <= lvWaterproof l) $
+        when (airLeft < lvWaterproof l) $
                 putStrLn $ "Air: " ++ show airLeft
         when (razors > 0) $
                 putStrLn $ "Razors: " ++ show razors
