@@ -49,7 +49,7 @@ createGame lvl = do
                 , gsRobotPosition       = roboPos
                 , gsLiftPosition        = liftPos
                 , gsTick                = 0
-                , gsAirLeft             = lvWaterproof lvl + 1
+                , gsAirLeft             = lvWaterproof lvl
                 
                 , gsTargets             = revertMap targs
                 , gsTargetSources       = targetSourcePositions
@@ -75,9 +75,7 @@ startGames :: Delays -> [GameState] -> IO ()
 startGames _ [] = putStrLn "You finished all levels! :)"
 startGames delays games@(game:nextGames) = do
         game' <- playGame delays game
-        
-        putStrLn $ "Lambdas collected: " ++ show (gsLambdasCollected game')
-        putStrLn $ "Moves: "             ++ show (gsMoves game')
+        let points = calculatePoints game'
         
         case gsProgress game' of
                 Restart         -> restartLevel
@@ -86,15 +84,18 @@ startGames delays games@(game:nextGames) = do
                                                         FallingRock     -> "You got crushed by rocks! :("
                                                         Drowning        -> "You drowned! :("
                                         putStrLn msg
+                                        putStrLn $ "Points: " ++ show points
+                                        putStrLn $ "Your route: " ++ showMoveHistory (gsMoveHistory game')
                                         askForContinue_ restartLevel
                 Win             -> do
                                         putStrLn "You won! Congratulations!"
-                                        putStrLn $ "Points: " ++ show (calculatePoints game')
+                                        putStrLn $ "Points: " ++ show points
                                         putStrLn $ "Your route: " ++ showMoveHistory (gsMoveHistory game')
                                         askForContinue_ (startGames delays nextGames)
                 Skip            -> startGames delays (nextGames ++ [game])
                 Abort           -> do
                                         putStrLn "You abandoned Marvin! :'("
+                                        putStrLn $ "Points: " ++ show points
                                         putStrLn $ "Your route: " ++ showMoveHistory (gsMoveHistory game')
                 
                 Running         -> error "Invalid state"
@@ -270,8 +271,8 @@ updateGameState gs
                 }
         where
         thisTick     = gsTick updatedGS + 1
-        gs'          = gs { gsLevel = (gsLevel gs) { lvWater = newWater } }
-        updatedGS    = execState (updateLevel' keysToUpdate gs') gs -- gs instead of gs' -> robot underwater after map update instead of instantly 
+        --gs'          = gs { gsLevel = (gsLevel gs) { lvWater = newWater } }
+        updatedGS    = execState (updateLevel' keysToUpdate gs) gs -- gs instead of gs' -> robot underwater after map update instead of instantly 
         updatedLvl   = gsLevel updatedGS
         water        = lvWater updatedLvl
         newWater     = water + if flooding /= 0 && thisTick `mod` flooding == 0 then 1 else 0
@@ -321,7 +322,7 @@ processObject gs gs' o (x,y)
                 Beard _
                         -> modifyLevelMap $ insert (x,y) beardInit . insertIntoAdjacentCells (x, y) beardInit $ lvl'
                 -- Flooding extension
-                Robot   -> gs' { gsAirLeft = if (lvWater . gsLevel) gs >= y then airLeft - 1 else (lvWaterproof . gsLevel) gs + 1}
+                Robot   -> gs' { gsAirLeft = if (lvWater . gsLevel) gs >= y then airLeft - 1 else (lvWaterproof . gsLevel) gs}
 
                 _       -> modifyLevelMap lvl'
         where
