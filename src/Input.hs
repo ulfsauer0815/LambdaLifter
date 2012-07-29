@@ -1,7 +1,8 @@
-module Input ( UserInput(..), getInput, showKeyMapping, showMoveHistory, printControls, askForContinue, askForContinue_) where
+module Input ( UserInput(..), getInput, showKeyMapping, showMoveHistory, printControls, askForAction, askForContinue, askForContinue_) where
 
 import Data.Char ( toLower )
 import Data.Maybe ( mapMaybe )
+import Data.Map ( Map, fromList, findWithDefault )
 import System.Console.ANSI ( SGR(..), BlinkSpeed(..), setSGR )
 
 data UserInput
@@ -15,7 +16,10 @@ data UserInput
         | UiSkip
         | UiContinue
         | UiUseRazor
-        deriving Eq
+        deriving (Eq, Ord)
+
+instance Show UserInput where
+        show = showKeyMapping
 
 
 -- Input processing
@@ -78,18 +82,23 @@ processInput c = case toLower c of
 
 
 askForContinue :: IO () -> IO () -> IO ()
-askForContinue actionAbort actionContinue = do
+askForContinue actionAbort actionContinue
+        = askForAction
+                (fromList [(UiContinue, actionContinue), (UiAbort, actionAbort)])
+                $ "Press " ++ showKeyMapping UiContinue ++ " to continue."
+
+
+-- (Map input (action to perform)) -> question to ask
+askForAction :: Map UserInput (IO ()) -> String -> IO ()
+askForAction actionMap text = do
         setSGR [SetBlinkSpeed SlowBlink]
-        putStrLn $ "Press " ++ showKeyMapping UiContinue ++ " to continue."
+        putStrLn text
         setSGR [Reset]
-        askForContinue'
+        getInput'
         where
-        askForContinue' = do
+        getInput' = do
                 a <- getInput
-                case a of
-                        UiContinue -> actionContinue
-                        UiAbort    -> actionAbort
-                        _          -> askForContinue'
+                findWithDefault getInput' a actionMap
 
 
 askForContinue_ :: IO () -> IO ()

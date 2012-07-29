@@ -1,7 +1,7 @@
 module Main where
 
 import Prelude          as P hiding ( lookup )
-import Data.Map         as M ( toList, keys, size, filter, lookup, insert, elemAt, delete )
+import Data.Map         as M ( fromList, toList, keys, size, filter, lookup, insert, elemAt, delete )
 import Control.Monad.State
 import Control.Concurrent ( threadDelay )
 import System.IO ( BufferMode(NoBuffering), stdin, hSetBuffering, hSetEcho )
@@ -24,12 +24,14 @@ TODOs:
 
 
 data Delays = Delays
-        { deMapUpdate          :: Int
+        { deMapUpdate           :: Int
+        , deMove                :: Int
         }
 
 defaultDelays :: Delays
 defaultDelays = Delays
-        { deMapUpdate          = 12500
+        { deMapUpdate           = 12500
+        , deMove                = 30000
         }
 
 
@@ -75,9 +77,9 @@ startGames :: Delays -> [GameState] -> IO ()
 startGames _ [] = putStrLn "You finished all levels! :)"
 startGames delays games@(game:nextGames) = do
         game' <- playGame Nothing delays game
-        let points      = calculatePoints game'
-        let moveHistory = gsMoveHistory game' 
         
+        let replay      = playGame (Just $ reverse (gsMoveHistory game')) delays game
+
         case gsProgress game' of
                 Restart         -> restartLevel
                 Loss reason     -> do
@@ -85,25 +87,31 @@ startGames delays games@(game:nextGames) = do
                                                         FallingRock     -> "You got crushed by rocks! :("
                                                         Drowning        -> "You drowned! :("
                                         putStrLn msg
-                                        putStrLn $ "Points: " ++ show points
-                                        putStrLn $ "Your route: " ++ showMoveHistory moveHistory
+                                        printStats game'
                                         askForContinue_ restartLevel
                 Win             -> do
-                                        -- Instant Replay
-                                        _ <- playGame (Just $ reverse moveHistory) delays game
                                         putStrLn "You won! Congratulations!"
-                                        putStrLn $ "Points: " ++ show points
-                                        putStrLn $ "Your route: " ++ showMoveHistory moveHistory
-                                        askForContinue_ (startGames delays nextGames)
+                                        printStats game'
+                                        let ask = askForAction
+                                                (fromList [ (UiContinue , continueGames)
+                                                          , (UiRestart  , replay >>= printStats >> ask)
+                                                          , (UiAbort    , return ())
+                                                          ])
+                                                $  "Press " ++ showKeyMapping UiRestart ++ " to view replay\n"
+                                                ++ "Press " ++ showKeyMapping UiContinue ++ " to continue"
+                                        ask
                 Skip            -> startGames delays (nextGames ++ [game])
                 Abort           -> do
                                         putStrLn "You abandoned Marvin! :'("
-                                        putStrLn $ "Points: " ++ show points
-                                        putStrLn $ "Your route: " ++ showMoveHistory moveHistory
+                                        printStats game'
                 
                 Running         -> error "Invalid state"
         where
-        restartLevel = startGames delays games
+        restartLevel    = startGames delays games
+        continueGames   = startGames delays nextGames
+        printStats g= do
+                putStrLn $ "Points: "     ++ show            (calculatePoints g)
+                putStrLn $ "Your route: " ++ showMoveHistory (gsMoveHistory g)
 
 
 calculatePoints :: GameState -> Int
@@ -120,7 +128,7 @@ calculatePoints gs
 
 
 playGame :: Maybe [UserInput] -> Delays -> GameState -> IO GameState
-playGame (Just []) _ game = return game {gsProgress = Abort}
+playGame (Just []) _ game = return game {gsProgress = if gsProgress game == Win then Win else Abort}
 playGame mMoves delays game = do
         clearScreen
         printLevel game
@@ -128,7 +136,7 @@ playGame mMoves delays game = do
           then do
                 dir <- case mMoves of
                   Nothing       -> getInput
-                  Just (x:_)    -> return x
+                  Just (x:_)    -> threadDelay (deMove delays) >> return x
                   Just []       -> error "playGame with Just [] - cannot happen"
                 case dir of
                         UiAbort         -> return game {gsProgress = Abort}
