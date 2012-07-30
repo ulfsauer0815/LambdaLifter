@@ -15,10 +15,6 @@ A few specification extensions were posted:
 - [Beards and Razors] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/beards.pdf)
 - [Higher Order Rocks] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/horocks.pdf)
 
-###Currently missing
-- scoring (global)
-- saving game progress
-
 ##Installation
 Install required libraries
 
