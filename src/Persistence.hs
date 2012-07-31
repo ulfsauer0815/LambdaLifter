@@ -3,26 +3,27 @@ import Data.Map         as M ( Map, empty, fromList, insert, filter, size )
 import Prelude          as P hiding ( lookup )
 import Data.List        as L ( isPrefixOf )
 
-import Game ( LevelMap, Level(..), Object(..), charToObject, ObjectInitValues(..), isLambda, isHigherOrderRock)
+import Game ( LevelMap, Level(..), Object(..), charToObject, ObjectInitValues(..), LevelValues(..), defaultLevelValues, isLambdaLike)
 import Data.Char (isDigit)
+
 
 readLevelFile :: FilePath -> IO Level
 readLevelFile f = do
         c  <- readFile f
         let (lvlString, lvlMetadata)    = splitLevelAndMetadataString . lines $ c
         -- Process metadata
-        let lBeardGrowthRate            = extractBeardGrowthRateFromMetadata    25      lvlMetadata -- TODO: put constants somewhere else
+        let lBeardGrowthRate            = extractBeardGrowthRateFromMetadata    (leBeardGrowthRate defaultLevelValues)  lvlMetadata
         let objectInitVals              = ObjectInitValues { oiBeardGrowthRate = lBeardGrowthRate }
         -- Process level-string
         let lMap                        = levelStringToMap objectInitVals lvlString
         return Level { lvMap            = lMap
-                     , lvTrampolines    = extractTrampolinesFromMetadata        empty   lvlMetadata
+                     , lvTrampolines    = extractTrampolinesFromMetadata        empty                                   lvlMetadata
                      , lvGrowthRate     = lBeardGrowthRate
-                     , lvRazors         = extractRazorsFromMetadata             0       lvlMetadata
-                     , lvFlooding       = extractFloodingFromMetadata           0       lvlMetadata
-                     , lvWater          = extractWaterFromMetadata              0       lvlMetadata
-                     , lvWaterproof     = extractWaterproofFromMetadata         10      lvlMetadata
-                     , lvLambdas        = M.size . M.filter (\o -> isLambda o || isHigherOrderRock o) $ lMap }
+                     , lvRazors         = extractRazorsFromMetadata             (leRazors          defaultLevelValues)  lvlMetadata
+                     , lvFlooding       = extractFloodingFromMetadata           (leFlooding        defaultLevelValues)  lvlMetadata
+                     , lvWater          = extractWaterFromMetadata              (leWater           defaultLevelValues)  lvlMetadata
+                     , lvWaterproof     = extractWaterproofFromMetadata         (leWaterproof      defaultLevelValues)  lvlMetadata
+                     , lvLambdas        = M.size . M.filter isLambdaLike $ lMap }
         where
         splitLevelAndMetadataString :: [String] -> ([String], [String])
         splitLevelAndMetadataString s = (tFst, P.filter (/= "") tSnd)

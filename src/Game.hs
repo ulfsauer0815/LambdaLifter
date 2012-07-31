@@ -1,7 +1,9 @@
 module Game ( Object(..), RockType(..), Position, LevelMap, Level(..), GameProgress(..), LossReason(..), GameState(..)
-            , isTrampoline, isTarget, isBeard, isRock, isLambda, isHigherOrderRock, isSimpleRock, isEmpty, isWall, isEarth, isLiftOpen, isLiftClosed, isRazor
+            , isTrampoline, isTarget, isBeard, isRock, isLambda, isHigherOrderRock, isSimpleRock
+            , isLambdaLike, isEmpty, isWall, isEarth, isLiftOpen, isLiftClosed, isRazor
             , charToObject, objectToChar, objectColor, printLevel
-            , ObjectInitValues(..))
+            , sortForTraversal
+            , ObjectInitValues(..), LevelValues(..), defaultLevelValues)
 where
 
 import Data.List (sortBy)
@@ -45,9 +47,26 @@ data Level = Level
         , lvGrowthRate  :: Int
         , lvRazors      :: Int
         , lvLambdas     :: Int
-        , lvWater       :: Int -- default  0
-        , lvFlooding    :: Int -- default  0
-        , lvWaterproof  :: Int -- default 10
+        , lvWater       :: Int
+        , lvFlooding    :: Int
+        , lvWaterproof  :: Int
+        }
+
+data LevelValues = LevelValues
+        { leBeardGrowthRate     :: Int
+        , leRazors              :: Int
+        , leFlooding            :: Int
+        , leWater               :: Int
+        , leWaterproof          :: Int
+        }
+
+defaultLevelValues :: LevelValues
+defaultLevelValues = LevelValues
+        { leBeardGrowthRate     = 25
+        , leRazors              =  0
+        , leFlooding            =  0
+        , leWater               =  0
+        , leWaterproof          = 10
         }
 
 
@@ -69,7 +88,6 @@ data LossReason
 
 data GameState = GameState
         { gsLevel               :: Level
-        , gsLevelDimensions     :: Position -- TODO: necessary?
         , gsRobotPosition       :: Position
         , gsLiftPosition        :: Position
         , gsTick                :: Int
@@ -143,6 +161,9 @@ isHigherOrderRock :: Object -> Bool
 isHigherOrderRock (Rock HigherOrder)    = True
 isHigherOrderRock _                     = False
 
+isLambdaLike :: Object -> Bool
+isLambdaLike o = isLambda o || isHigherOrderRock o
+
 isSimpleRock :: Object -> Bool
 isSimpleRock (Rock Simple)              = True
 isSimpleRock _                          = False
@@ -166,7 +187,7 @@ objectToChar o
                 Empty           -> ' '
 
 
-charToObject :: ObjectInitValues -> Char -> Object
+charToObject :: ObjectInitValues -> Char -> Object -- TODO: change to Maybe Object?
 charToObject oiv c
         = case c of
                 'R'                     -> Robot
@@ -243,7 +264,26 @@ printLevelMap l = (sequence_ . printAList . levelToSortedAList) l >> setSGR [ Re
         levelToSortedAList :: Level -> [(Position, Object)]
         levelToSortedAList = sortBy levelMapOutputSort . toList . lvMap
         
-        levelMapOutputSort ((x0,y0),_) ((x1,y1),_)
-                | y0 < y1       = GT
-                | x0 > x1       = GT
-                | otherwise     = LT
+        levelMapOutputSort (pos0,_) (pos1,_) = compareForLevelOutput pos0 pos1
+
+
+compareForLevelOutput :: Position -> Position -> Ordering
+compareForLevelOutput (x0,y0) (x1,y1)
+        | y0 < y1       = GT
+        | y0 > y1       = LT
+        | x0 > x1       = GT
+        | x0 < x1       = LT
+        | otherwise     = EQ
+
+
+compareForLevelTraversal :: Position -> Position -> Ordering
+compareForLevelTraversal (x0,y0) (x1,y1)
+        | y0 < y1       = LT
+        | y0 > y1       = GT
+        | x0 < x1       = LT
+        | x0 > x1       = GT
+        | otherwise     = EQ
+
+
+sortForTraversal :: [Position] -> [Position]
+sortForTraversal = sortBy compareForLevelTraversal

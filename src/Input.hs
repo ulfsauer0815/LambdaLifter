@@ -57,7 +57,6 @@ showKeyMappingOfficial a = case a of
         UiAbort   -> return 'A'
         UiUseRazor-> return 'S'
         
-        -- TODO: check
         UiRestart -> Nothing
         UiSkip    -> Nothing
         UiContinue-> Nothing

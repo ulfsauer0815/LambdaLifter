@@ -1,7 +1,7 @@
 module Main where
 
 import Prelude          as P hiding ( lookup )
-import Data.Map         as M ( fromList, toList, keys, size, filter, lookup, insert, elemAt, delete )
+import Data.Map         as M ( fromList, toList, keys, size, filter, lookup, insert, elemAt, delete, keys )
 import Control.Monad.State
 import Control.Concurrent ( threadDelay )
 import System.IO ( BufferMode(NoBuffering), stdin, hSetBuffering, hSetEcho )
@@ -15,7 +15,8 @@ import Persistence
 
 {--
 TODOs: 
- - add (global) scoring
+ - highscores
+        - stats directory with map files containing the score and the corresponding moves 
  - add feature to save the game
         - probably needed: currentLevel(Map, Trampolines) + RobotPos
         - extra: score/stats, loaded maps / finished maps
@@ -47,7 +48,6 @@ createGame lvl = do
                      else Nothing
         return GameState
                 { gsLevel               = lvl { lvMap = insert roboPos Empty (lvMap lvl)} -- delete robot start position 
-                , gsLevelDimensions     = lvlDims
                 , gsRobotPosition       = roboPos
                 , gsLiftPosition        = liftPos
                 , gsTick                = 0
@@ -67,8 +67,6 @@ createGame lvl = do
         trams = M.filter isTrampoline    lmap
         targs = M.filter isTarget        lmap
         lifts = M.filter (== LiftClosed) lmap
-        lvlDims = (maximum xs, maximum ys)
-        (xs,ys) = unzip . keys $ lmap
         targetSourcePositions = listMap . filterMaybeTuples1 . map (\(pos,obj) -> (pos, lookup obj (revertMap trams)) ) . toList $ lvTrampolines lvl
         filterMaybeTuples1 ls = [(x,y) | (x, Just y) <- ls]
 
@@ -155,9 +153,8 @@ playGame mMoves delays game = do
                                                   then playGame tailMoves delays game'
                                                   else do
                                                         let game''   = updateGameState game'
-                                                        let game'''  = checkIfRobotGotCrushed game' game'' -- TODO: check in updateGameState
                                                         threadDelay $ deMapUpdate delays
-                                                        playGame tailMoves delays game'''
+                                                        playGame tailMoves delays game''
           else return game
         
         where
@@ -167,7 +164,7 @@ playGame mMoves delays game = do
                 Nothing     -> Nothing
 
 
-moveRobot :: GameState -> UserInput -> Maybe GameState -- TODO: Maybe unnecessary
+moveRobot :: GameState -> UserInput -> Maybe GameState
 moveRobot game dir = do
         let lvl = gsLevel game
         nrp   <- newRobotPosition
@@ -264,55 +261,48 @@ moveRobot game dir = do
         addMove m = m : gsMoveHistory game
 
 
- -- TODO: kind of dirty
-checkIfRobotGotCrushed :: GameState -> GameState -> GameState
-checkIfRobotGotCrushed oldGs newGs
-        = if not (isRockOrLambda' aboveOld)
-             && isRockOrLambda' aboveNew
-            then newGs {gsProgress = Loss FallingRock}
-            else newGs
-        where
-        isRockOrLambda' = maybe False (\o -> isRock o || isLambda o)
-        aboveOld        = lookup (rX,rY+1) $ lvMap . gsLevel $ oldGs
-        aboveNew        = lookup (rX,rY+1) $ lvMap . gsLevel $ newGs
-        (rX,rY)         = gsRobotPosition oldGs
-
-
 updateGameState :: GameState -> GameState
 updateGameState gs
         = updatedGS
                 { gsTick        = thisTick
-                , gsProgress    = if gsAirLeft updatedGS < 0
-                                    then Loss Drowning
-                                    else gsProgress updatedGS -- robot may drown
-                , gsLevel
-                        = (gsLevel updatedGS)
-                                { lvWater       = newWater
-                                }
+                , gsProgress    = case () of -- dirty multi-way if, can't wait for ghc 7.5
+                                        _ | gsAirLeft updatedGS < 0             -> Loss Drowning        -- robot may drown
+                                          | robotGotCrushed gs updatedGS        -> Loss FallingRock     -- robot may get crushed by a rock
+                                          | otherwise                           -> gsProgress updatedGS -- no change
+                , gsLevel = (gsLevel updatedGS) { lvWater = newWater }
                 }
         where
         thisTick     = gsTick updatedGS + 1
         --gs'          = gs { gsLevel = (gsLevel gs) { lvWater = newWater } }
-        updatedGS    = execState (updateLevel' keysToUpdate gs) gs -- gs instead of gs' -> robot underwater after map update instead of instantly 
+        updatedGS    = execState (updateLevel keysToUpdate gs) gs -- gs instead of gs' -> robot underwater after map update instead of instantly
         updatedLvl   = gsLevel updatedGS
         water        = lvWater updatedLvl
         newWater     = water + if flooding /= 0 && thisTick `mod` flooding == 0 then 1 else 0
         flooding     = lvFlooding updatedLvl
         
-        updateLevel' :: [Position] -> GameState -> State GameState GameState
-        updateLevel' [] _ = get
-        updateLevel' (pos:poss) lvl = do
+        updateLevel :: [Position] -> GameState -> State GameState GameState
+        updateLevel [] _ = get
+        updateLevel (pos:poss) lvl = do
                 modify $ flip (updateLevelByPosition lvl) pos
-                updateLevel' poss lvl
-        keysToUpdate = [(x,y) | y <- [1..maxY], x <- [1..maxX]] -- TODO: ewww, wenn optimiert
-        (maxX, maxY) = gsLevelDimensions gs
-
+                updateLevel poss lvl
+        
+        keysToUpdate = sortForTraversal . keys . lvMap . gsLevel $ gs
+        
         updateLevelByPosition :: GameState -> GameState -> Position -> GameState
         updateLevelByPosition g g' pos
                 = case lookup pos lvlMap of
                         Nothing -> g'
                         Just e -> processObject g g' e pos
                 where lvlMap = insert (gsRobotPosition gs) Robot . lvMap . gsLevel $ g
+
+        robotGotCrushed oldGs newGs
+                = not (isRockOrLambda' aboveOld)
+                     && isRockOrLambda' aboveNew
+                where
+                isRockOrLambda' = maybe False (\o -> isRock o || isLambda o)
+                aboveOld        = lookup (rX,rY+1) $ lvMap . gsLevel $ oldGs
+                aboveNew        = lookup (rX,rY+1) $ lvMap . gsLevel $ newGs
+                (rX,rY)         = gsRobotPosition oldGs
 
 
 processObject :: GameState -> GameState -> Object -> Position -> GameState
