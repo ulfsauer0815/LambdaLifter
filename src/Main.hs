@@ -173,7 +173,7 @@ moveRobot game dir = do
         case field of
                 Empty   |  dir == UiUseRazor
                     && lvRazors lvl > 0
-                                -> return game  { gsLevel = (gsLevel game) { lvMap = insertIntoAdjacentNonBeardCells nrp Empty lmap
+                                -> return game  { gsLevel = (gsLevel game) { lvMap = insertIntoAdjacentBeardCells nrp Empty lmap
                                                                            , lvRazors = lvRazors lvl - 1}
                                                 , gsRobotPosition = nrp
                                                 , gsMoves = gsMoves game + 1
@@ -247,16 +247,8 @@ moveRobot game dir = do
                 _               -> Just (rX   ,rY  ) -- use Nothing to produce an invalid GameState
         (rX, rY) = gsRobotPosition game
         
-        -- TODO: code duplication :( see below -> insertIntoAdjacentCells
-        insertIntoAdjacentNonBeardCells :: Position -> Object -> LevelMap -> LevelMap
-        insertIntoAdjacentNonBeardCells (x,y) obj lvlMap = insertObjectIntoPositions obj lvlMap (adjacentPositions x y)
-        
-        insertObjectIntoPositions ::  Object -> LevelMap -> [Position] -> LevelMap 
-        insertObjectIntoPositions obj = foldl (flip (flip insertIfBeard obj))
-        
-        insertIfBeard :: Position -> Object -> LevelMap -> LevelMap
-        insertIfBeard (x,y) obj lmap = if isBeard' $ lookup (x,y) lmap then insert (x,y) obj lmap else lmap
-        isBeard' = maybe False isBeard
+        insertIntoAdjacentBeardCells :: Position -> Object -> LevelMap -> LevelMap
+        insertIntoAdjacentBeardCells (x,y) obj lvlMap = insertObjectIntoPositions (conditionalInsert isBeard) obj lvlMap (adjacentPositions x y)
         
         addMove m = m : gsMoveHistory game
 
@@ -331,7 +323,7 @@ processObject gs gs' o (x,y)
                 Beard g | g > 0
                         -> modifyLevelMap $ insert (x, y) (Beard $ g-1) lvl'
                 Beard _
-                        -> modifyLevelMap $ insert (x,y) beardInit . insertIntoAdjacentCells (x, y) beardInit $ lvl'
+                        -> modifyLevelMap $ insert (x,y) beardInit . insertIntoAdjacentEmptyCells (x, y) beardInit $ lvl'
                 -- Flooding extension
                 Robot   -> gs' { gsAirLeft = if (lvWater . gsLevel) gs >= y then airLeft - 1 else (lvWaterproof . gsLevel) gs}
 
@@ -353,15 +345,21 @@ processObject gs gs' o (x,y)
         lvl' = lvMap . gsLevel $ gs'
         beardInit = Beard $ (lvGrowthRate . gsLevel) gs -1
         
-        insertIntoAdjacentCells :: Position -> Object -> LevelMap -> LevelMap
-        insertIntoAdjacentCells (x',y') obj lvlMap = insertObjectIntoPositions obj lvlMap (adjacentPositions x' y')
-        
-        insertObjectIntoPositions ::  Object -> LevelMap -> [Position] -> LevelMap 
-        insertObjectIntoPositions obj = foldl (flip (flip insertIfEmpty obj))
-        
+        insertIntoAdjacentEmptyCells :: Position -> Object -> LevelMap -> LevelMap
+        insertIntoAdjacentEmptyCells (x',y') obj lvlMap = insertObjectIntoPositions insertIfEmpty obj lvlMap (adjacentPositions x' y')
+
         insertIfEmpty :: Position -> Object -> LevelMap -> LevelMap
         insertIfEmpty (x',y') obj lmap = if lookup (x',y') lvl == Just Empty then insert (x',y') obj lmap else lmap -- note that lvl not lmap is used
 
+
+
+insertObjectIntoPositions :: (Position -> Object -> LevelMap -> LevelMap) -> Object -> LevelMap -> [Position] -> LevelMap
+insertObjectIntoPositions condInsert obj = foldl (flip (flip condInsert obj))
+
+
+conditionalInsert :: (Object -> Bool) -> Position -> Object -> LevelMap -> LevelMap
+conditionalInsert cond (x,y) obj lmap = if cond' $ lookup (x,y) lmap then insert (x,y) obj lmap else lmap
+        where cond' = maybe False cond
 
 adjacentPositions :: Int -> Int -> [(Int,Int)]
 adjacentPositions x y = [(i,j) | i <- [x-1,x,x+1], j <- [y-1,y,y+1]]

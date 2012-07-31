@@ -13,7 +13,7 @@ readLevelFile f = do
         let (lvlString, lvlMetadata)    = splitLevelAndMetadataString . lines $ c
         -- Process metadata
         let lBeardGrowthRate            = extractBeardGrowthRateFromMetadata    (leBeardGrowthRate defaultLevelValues)  lvlMetadata
-        let objectInitVals              = ObjectInitValues { oiBeardGrowthRate = lBeardGrowthRate }
+        let objectInitVals              = ObjectInitValues { oiBeardGrowthRate = lBeardGrowthRate - 1 }
         -- Process level-string
         let lMap                        = levelStringToMap objectInitVals lvlString
         return Level { lvMap            = lMap
