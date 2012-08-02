@@ -374,16 +374,21 @@ main = do
         hideCursor
             
         args <- getArgs
-        lvls  <- mapM readLevelFile args
-        let gamesM = mapM createGame lvls
-        case gamesM of
-                Nothing -> putStrLn "Error loading levels..." -- TODO: verbose error msgs
-                Just gs -> do
-                        clearScreen
-                        putStrLn "Welcome to LambdaLifter (alpha)"
-                        putStrLn ""
-                        printControls
-                        askForContinue_ (startGames delays gs)
+        lvlsM  <- mapM readLevelFile args
+        
+        case sequence lvlsM of
+                Nothing ->
+                        putStrLn "Error loading maps, invalid map format"
+                Just lvls -> do
+                        let gamesM = mapM createGame lvls
+                        case gamesM of
+                                Nothing -> putStrLn "Error creating levels, invalid properties"
+                                Just gs -> do
+                                        clearScreen
+                                        putStrLn "Welcome to LambdaLifter (alpha)"
+                                        putStrLn ""
+                                        printControls
+                                        askForContinue_ (startGames delays gs)
         
         showCursor
         where

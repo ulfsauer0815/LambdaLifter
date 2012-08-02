@@ -7,16 +7,17 @@ import Game ( LevelMap, Level(..), Object(..), charToObject, ObjectInitValues(..
 import Data.Char (isDigit)
 
 
-readLevelFile :: FilePath -> IO Level
-readLevelFile f = do
+readLevelFile :: FilePath -> IO (Maybe Level)
+readLevelFile f = do -- IO monad
         c  <- readFile f
         let (lvlString, lvlMetadata)    = splitLevelAndMetadataString . lines $ c
         -- Process metadata
         let lBeardGrowthRate            = extractBeardGrowthRateFromMetadata    (leBeardGrowthRate defaultLevelValues)  lvlMetadata
         let objectInitVals              = ObjectInitValues { oiBeardGrowthRate = lBeardGrowthRate - 1 }
-        -- Process level-string
-        let lMap                        = levelStringToMap objectInitVals lvlString
-        return Level { lvMap            = lMap
+        return $ do -- Maybe monad
+                -- Process level-string
+                lMap <- levelStringToMap objectInitVals lvlString
+                return Level { lvMap            = lMap
                      , lvTrampolines    = extractTrampolinesFromMetadata        empty                                   lvlMetadata
                      , lvGrowthRate     = lBeardGrowthRate
                      , lvRazors         = extractRazorsFromMetadata             (leRazors          defaultLevelValues)  lvlMetadata
@@ -56,5 +57,17 @@ extractTrampolinesFromMetadata = extractValueFromMetadata ("Trampoline " `isPref
                 where (trampo:target:_) = P.filter (`elem` ['A' .. 'I'] ++ ['0'..'9']) l
 
 
-levelStringToMap :: ObjectInitValues -> [String] -> LevelMap
-levelStringToMap oiv sl = fromList . concatMap (\(y, s) -> zip [(x,y) | x <- [1..]] (map (charToObject oiv) s)) $ zip [1..] (reverse sl)
+{-
+-levelStringToMap :: ObjectInitValues -> [String] -> LevelMap
+-levelStringToMap oiv sl = fromList . concatMap (\(y, s) -> zip [(x,y) | x <- [1..]] (map (charToObject oiv) s)) $ zip [1..] (reverse sl)
+-}
+
+levelStringToMap :: ObjectInitValues -> [String] -> Maybe LevelMap
+levelStringToMap oiv sl = do -- Maybe monad
+        tiles <- mapM numberedLineToPositionObject $ zip [1..] (reverse sl)
+        return $ fromList . concat $ tiles
+        where
+        numberedLineToPositionObject :: (Int, String) -> Maybe [((Int,Int), Object)]
+        numberedLineToPositionObject (y, line) = do -- Maybe monad
+                objectList <- mapM (charToObject oiv) line
+                return $ zip [(x,y) | x <- [1..]] objectList

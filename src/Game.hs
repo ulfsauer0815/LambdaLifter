@@ -187,23 +187,23 @@ objectToChar o
                 Empty           -> ' '
 
 
-charToObject :: ObjectInitValues -> Char -> Object -- TODO: change to Maybe Object?
+charToObject :: ObjectInitValues -> Char -> Maybe Object
 charToObject oiv c
         = case c of
-                'R'                     -> Robot
-                '#'                     -> Wall
-                '*'                     -> Rock Simple
-                '@'                     -> Rock HigherOrder
-                '\\'                    -> Lambda
-                'L'                     -> LiftClosed
-                'O'                     -> LiftOpen
-                '.'                     -> Earth
-                ' '                     -> Empty
-                a | a `elem` ['A'..'I'] -> Trampoline a
-                  | a `elem` ['0'..'9'] -> Target a
-                'W'                     -> Beard $ oiBeardGrowthRate oiv
-                '!'                     -> Razor
-                a   -> error $ "Cannot convert \"" ++ a : "\" to Object: no mapping found" ++ [a] ++ "aa"
+                'R'                     -> return Robot
+                '#'                     -> return Wall
+                '*'                     -> return $ Rock Simple
+                '@'                     -> return $ Rock HigherOrder
+                '\\'                    -> return Lambda
+                'L'                     -> return LiftClosed
+                'O'                     -> return LiftOpen
+                '.'                     -> return Earth
+                ' '                     -> return Empty
+                a | a `elem` ['A'..'I'] -> return $ Trampoline a
+                  | a `elem` ['0'..'9'] -> return $ Target a
+                'W'                     -> return $ Beard $ oiBeardGrowthRate oiv
+                '!'                     -> return Razor
+                _                       -> Nothing
 
 
 objectColor :: Object -> [SGR]
