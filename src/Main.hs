@@ -2,6 +2,7 @@ module Main where
 
 import Prelude          as P hiding ( lookup )
 import Data.Map         as M ( fromList, toList, keys, size, filter, lookup, insert, elemAt, delete, keys )
+import Data.Maybe ( fromMaybe )
 import Control.Monad.State
 import Control.Concurrent ( threadDelay )
 import System.IO ( BufferMode(NoBuffering), stdin, hSetBuffering, hSetEcho )
@@ -103,7 +104,7 @@ startGames delays games@(game:nextGames) = do
                                         putStrLn "You abandoned Marvin! :'("
                                         printStats game'
                 
-                Running         -> error "Invalid state"
+                Running         -> error "Invalid state" -- should not happen, playGame loops until progress != Running
         where
         restartLevel    = startGames delays games
         continueGames   = startGames delays nextGames
@@ -126,7 +127,7 @@ calculatePoints gs
 
 
 playGame :: Maybe [UserInput] -> Delays -> GameState -> IO GameState
-playGame (Just []) _ game = return game {gsProgress = if gsProgress game == Win then Win else Abort}
+playGame (Just []) _   game = return game {gsProgress = if gsProgress game == Win then Win else Abort}
 playGame mMoves delays game = do
         clearScreen
         printLevel game
@@ -135,7 +136,7 @@ playGame mMoves delays game = do
                 dir <- case mMoves of
                   Nothing       -> getInput
                   Just (x:_)    -> threadDelay (deMove delays) >> return x
-                  Just []       -> error "playGame with Just [] - cannot happen"
+                  Just []       -> error "playGame with Just [] - cannot happen" -- cannot happen, see first line
                 case dir of
                         UiAbort         -> return game {gsProgress = Abort}
                         UiRestart       -> return game {gsProgress = Restart}
@@ -216,13 +217,19 @@ moveRobot game dir = do
                                                 , gsMoves = gsMoves game + 1
                                                 , gsMoveHistory = addMove dir}
                         where
-                        lvlTramps = lvTrampolines lvl
-                        lvlTrampsNew = delete tc lvlTramps
-                        target = unMaybe . lookup tc $ lvlTramps
-                        removeTargetIfNoOtherTrampsTargetIt = if (>=1) . size . M.filter (==target) $ lvlTrampsNew then id else insert roboPosTrampoline Empty
-                        roboPosTrampoline = unMaybe $ do
-                                targ <- lookup tc lvlTramps
-                                lookup targ (gsTargets game)
+                        lvlTramps       = lvTrampolines lvl
+                        lvlTrampsNew    = delete tc lvlTramps
+                        removeTargetIfNoOtherTrampsTargetIt
+                                = maybe
+                                        id -- No Target for Trampoline found
+                                        (\target -> if (>=1) . size . M.filter (==target) $ lvlTrampsNew then id else insert roboPosTrampoline Empty)
+                                        (lookup tc lvlTramps)
+                        roboPosTrampoline
+                                = fromMaybe
+                                        nrp
+                                        (do -- Maybe monad
+                                                targ <- lookup tc lvlTramps
+                                                lookup targ (gsTargets game))
                 
                 Razor
                                 -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Empty lmap
@@ -237,8 +244,6 @@ moveRobot game dir = do
                                 -> return game  { gsProgress = Abort}
                 _               -> Nothing
         where
-        unMaybe (Just a) = a
-        unMaybe _        = error "unexpected Nothing value -> Trampoline may not have a Target" -- TODO: better error handling
         newRobotPosition= case dir of
                 UiUp            -> Just (rX   ,rY+1)
                 UiLeft          -> Just (rX-1 ,rY  )
