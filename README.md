@@ -7,6 +7,17 @@ You can find more information on the official site.
 - [ICFP Programming Contest 2012 Official Site] (http://icfpcontest2012.wordpress.com/)
 - [Full specification] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/task.pdf)
 
+##Screenshots
+Splash-Screen
+
+![Screenshot1](http://cloud.github.com/downloads/UlfS/LambdaLifter/ll4.png "Screenshot1")
+
+![Screenshot2](http://cloud.github.com/downloads/UlfS/LambdaLifter/ll5.png "Screenshot2")
+
+![Screenshot3](http://cloud.github.com/downloads/UlfS/LambdaLifter/ll2.png "Screenshot3")
+
+![Screenshot4](http://cloud.github.com/downloads/UlfS/LambdaLifter/ll0.png "Screenshot4")
+
 ###Extensions
 
 - [Weather] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/weather.pdf)
