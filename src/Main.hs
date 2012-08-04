@@ -391,7 +391,7 @@ main = do
                                 Nothing -> putStrLn "Error creating levels, invalid properties"
                                 Just gs -> do
                                         clearScreen
-                                        putStrLn "Welcome to LambdaLifter (alpha)"
+                                        putStrLn "Welcome to LambdaLifter"
                                         putStrLn ""
                                         printControls
                                         askForContinue_ (startGames delays gs)
