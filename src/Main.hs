@@ -1,23 +1,24 @@
 module Main where
 
-import Prelude          as P hiding ( lookup )
-import Data.Map         as M ( fromList, toList, keys, size, filter, lookup, insert, elemAt, delete, keys )
-import Data.Maybe ( fromMaybe )
-import Control.Monad.State
-import Control.Concurrent ( threadDelay )
-import System.IO ( BufferMode(NoBuffering), stdin, hSetBuffering, hSetEcho )
-import System.Environment ( getArgs )
-import System.Console.ANSI (clearScreen, hideCursor, showCursor)
+import           Control.Concurrent  (threadDelay)
+import           Control.Monad.State
+import           Data.Map            as M (delete, elemAt, filter, fromList, insert, keys, keys, lookup,
+                                           size, toList)
+import           Data.Maybe          (fromMaybe)
+import           Prelude             as P hiding (lookup)
+import           System.Console.ANSI (clearScreen, hideCursor, showCursor)
+import           System.Environment  (getArgs)
+import           System.IO           (BufferMode(NoBuffering), hSetBuffering, hSetEcho, stdin)
 
-import Utils
-import Game
-import Input
-import Persistence
+import           Game
+import           Input
+import           Persistence
+import           Utils
 
 {--
-TODOs: 
+TODOs:
  - highscores
-        - stats directory with map files containing the score and the corresponding moves 
+        - stats directory with map files containing the score and the corresponding moves
  - add feature to save the game
         - probably needed: currentLevel(Map, Trampolines) + RobotPos
         - extra: score/stats, loaded maps / finished maps
@@ -48,15 +49,15 @@ createGame lvl = do
                      then return . fst . elemAt 0 $ lifts
                      else Nothing
         return GameState
-                { gsLevel               = lvl { lvMap = insert roboPos Empty (lvMap lvl)} -- delete robot start position 
+                { gsLevel               = lvl { lvMap = insert roboPos Empty (lvMap lvl)} -- delete robot start position
                 , gsRobotPosition       = roboPos
                 , gsLiftPosition        = liftPos
                 , gsTick                = 0
                 , gsAirLeft             = lvWaterproof lvl
-                
+
                 , gsTargets             = revertMap targs
                 , gsTargetSources       = targetSourcePositions
-                
+
                 , gsProgress            = Running
                 , gsLambdasCollected    = 0
                 , gsMoves               = 0
@@ -71,12 +72,12 @@ createGame lvl = do
         targetSourcePositions = listMap . filterMaybeTuples1 . map (\(pos,obj) -> (pos, lookup obj (revertMap trams)) ) . toList $ lvTrampolines lvl
         filterMaybeTuples1 ls = [(x,y) | (x, Just y) <- ls]
 
-       
+
 startGames :: Delays -> [GameState] -> IO ()
 startGames _ [] = putStrLn "You finished all levels! :)"
 startGames delays games@(game:nextGames) = do
         game' <- playGame Nothing delays game
-        
+
         let replay      = playGame (Just $ reverse (gsMoveHistory game')) delays game
 
         case gsProgress game' of
@@ -103,7 +104,7 @@ startGames delays games@(game:nextGames) = do
                 Abort           -> do
                                         putStrLn "You abandoned Marvin! :'("
                                         printStats game'
-                
+
                 Running         -> error "Invalid state" -- should not happen, playGame loops until progress != Running
         where
         restartLevel    = startGames delays games
@@ -141,7 +142,7 @@ playGame mMoves delays game = do
                         UiAbort         -> return game {gsProgress = Abort}
                         UiRestart       -> return game {gsProgress = Restart}
                         UiSkip          -> return game {gsProgress = Skip}
-                        _               -> 
+                        _               ->
                                 case moveRobot game dir of
                                         Nothing   -> playGame mMoves delays game
                                         Just game' -> do
@@ -149,7 +150,7 @@ playGame mMoves delays game = do
                                                 printLevel game'
                                                 -- no update after a win
                                                 --    otherwise a rock may fall onto the OpenLift the Robot just stepped into, or
-                                                --    or the Robot may drown after stepping into the OpenLift 
+                                                --    or the Robot may drown after stepping into the OpenLift
                                                 if gsProgress game' == Win
                                                   then playGame tailMoves delays game'
                                                   else do
@@ -157,7 +158,7 @@ playGame mMoves delays game = do
                                                         threadDelay $ deMapUpdate delays
                                                         playGame tailMoves delays game''
           else return game
-        
+
         where
         tailMoves = case mMoves of
                 Just (_:xs) -> Just xs
@@ -170,7 +171,7 @@ moveRobot game dir = do
         let lvl = gsLevel game
         nrp   <- newRobotPosition
         field <- lookup nrp $ lvMap lvl
-        let lmap = lvMap lvl 
+        let lmap = lvMap lvl
         case field of
                 Empty   |  dir == UiUseRazor
                     && lvRazors lvl > 0
@@ -230,14 +231,14 @@ moveRobot game dir = do
                                         (do -- Maybe monad
                                                 targ <- lookup tc lvlTramps
                                                 lookup targ (gsTargets game))
-                
+
                 Razor
                                 -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Empty lmap
                                                                            , lvRazors = lvRazors lvl + 1}
                                                 , gsRobotPosition = nrp
                                                 , gsMoves = gsMoves game + 1
                                                 , gsMoveHistory = addMove dir}
-                                                
+
                 _   | dir == UiWait
                                 -> return game
                 _   | dir == UiAbort
@@ -251,10 +252,10 @@ moveRobot game dir = do
                 UiRight         -> Just (rX+1 ,rY  )
                 _               -> Just (rX   ,rY  ) -- use Nothing to produce an invalid GameState
         (rX, rY) = gsRobotPosition game
-        
+
         insertIntoAdjacentBeardCells :: Position -> Object -> LevelMap -> LevelMap
         insertIntoAdjacentBeardCells (x,y) obj lvlMap = insertObjectIntoPositions (conditionalInsert isBeard) obj lvlMap (adjacentPositions x y)
-        
+
         addMove m = m : gsMoveHistory game
 
 
@@ -276,15 +277,15 @@ updateGameState gs
         water        = lvWater updatedLvl
         newWater     = water + if flooding /= 0 && thisTick `mod` flooding == 0 then 1 else 0
         flooding     = lvFlooding updatedLvl
-        
+
         updateLevel :: [Position] -> GameState -> State GameState GameState
         updateLevel [] _ = get
         updateLevel (pos:poss) lvl = do
                 modify $ flip (updateLevelByPosition lvl) pos
                 updateLevel poss lvl
-        
+
         keysToUpdate = sortForTraversal . keys . lvMap . gsLevel $ gs
-        
+
         updateLevelByPosition :: GameState -> GameState -> Position -> GameState
         updateLevelByPosition g g' pos
                 = case lookup pos lvlMap of
@@ -322,7 +323,7 @@ processObject gs gs' o (x,y)
                         && lookup (x+1, y)     lvl == Just Empty
                         && lookup (x+1, y-1)   lvl == Just Empty
                         -> modifyLevelMap $ insertFallingRock (x+1, y-1) rt lvl . insert (x,y) Empty $ lvl'
-                LiftClosed | gsLambdasCollected gs == (lvLambdas . gsLevel) gs 
+                LiftClosed | gsLambdasCollected gs == (lvLambdas . gsLevel) gs
                         -> modifyLevelMap $ insert (x,y) LiftOpen lvl'
                 -- Beards and Razors extension
                 Beard g | g > 0
@@ -335,7 +336,7 @@ processObject gs gs' o (x,y)
                 _       -> modifyLevelMap lvl'
         where
         modifyLevelMap lvlMap = gs' { gsLevel = (gsLevel gs') { lvMap = lvlMap}}
-        
+
         insertFallingRock :: Position -> RockType -> LevelMap -> LevelMap -> LevelMap
         insertFallingRock pos@(rX,rY) rt l l'
                 = case lookup (rX,rY-1) l of
@@ -343,13 +344,13 @@ processObject gs gs' o (x,y)
                         _               -> case rt of
                                                 Simple          -> insert pos (Rock rt) l'
                                                 HigherOrder     -> insert pos Lambda    l'
-        
+
         airLeft = gsAirLeft gs'
         isRock' = maybe False isRock
         lvl  = insert (gsRobotPosition gs) Robot . lvMap . gsLevel $ gs
         lvl' = lvMap . gsLevel $ gs'
         beardInit = Beard $ (lvGrowthRate . gsLevel) gs -1
-        
+
         insertIntoAdjacentEmptyCells :: Position -> Object -> LevelMap -> LevelMap
         insertIntoAdjacentEmptyCells (x',y') obj lvlMap = insertObjectIntoPositions insertIfEmpty obj lvlMap (adjacentPositions x' y')
 
@@ -377,10 +378,10 @@ main = do
         hSetEcho stdin False
         hSetBuffering stdin NoBuffering
         hideCursor
-            
+
         args <- getArgs
         lvlsM  <- mapM readLevelFile args
-        
+
         case sequence lvlsM of
                 Nothing ->
                         putStrLn "Error loading maps, invalid map format"
@@ -394,7 +395,7 @@ main = do
                                         putStrLn ""
                                         printControls
                                         askForContinue_ (startGames delays gs)
-        
+
         showCursor
         where
         delays = defaultDelays

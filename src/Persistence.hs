@@ -1,10 +1,12 @@
 module Persistence ( readLevelFile ) where
-import Data.Map         as M ( Map, empty, fromList, insert, filter, size )
-import Prelude          as P hiding ( lookup )
-import Data.List        as L ( isPrefixOf )
+import           Data.List as L (isPrefixOf)
+import           Data.Map  as M (Map, empty, filter, fromList, insert, size)
+import           Prelude   as P hiding (lookup)
 
-import Game ( LevelMap, Level(..), Object(..), charToObject, ObjectInitValues(..), LevelValues(..), defaultLevelValues, isLambdaLike)
-import Data.Char (isDigit)
+import           Data.Char (isDigit)
+import           Game      (Level(..), LevelMap, LevelValues(..), Object(..),
+ ObjectInitValues(..), charToObject, defaultLevelValues,
+ isLambdaLike)
 
 
 readLevelFile :: FilePath -> IO (Maybe Level)
@@ -29,8 +31,8 @@ readLevelFile f = do -- IO monad
         splitLevelAndMetadataString :: [String] -> ([String], [String])
         splitLevelAndMetadataString s = (tFst, P.filter (/= "") tSnd)
                 where (tFst, tSnd) = span (/= "") s
-        
-        
+
+
 -- TODO: quick and dirty parsing :(
 extractValueFromMetadata :: (line -> Bool) -> (value -> line -> value) -> value -> [line] -> value
 extractValueFromMetadata lineCondition extractFromLine = foldl (\d l -> if lineCondition l then extractFromLine d l else d )

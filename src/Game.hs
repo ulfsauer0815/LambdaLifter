@@ -6,12 +6,12 @@ module Game ( Object(..), RockType(..), Position, LevelMap, Level(..), GameProgr
             , ObjectInitValues(..), LevelValues(..), defaultLevelValues)
 where
 
-import Data.List (sortBy)
-import Data.Map as M (Map, null, toList, insert)
-import Control.Monad
-import System.Console.ANSI ( setSGR, SGR(..), ConsoleLayer(..), ColorIntensity(..), Color(..) )
+import           Control.Monad
+import           Data.List           (sortBy)
+import           Data.Map            as M (Map, insert, null, toList)
+import           System.Console.ANSI (Color(..), ColorIntensity(..), ConsoleLayer(..), SGR(..), setSGR)
 
-import Input ( UserInput )
+import           Input               (UserInput)
 
 -- Data structures
 
@@ -37,7 +37,7 @@ data RockType
         deriving (Eq, Ord)
 
 
-        
+
 type Position = (Int, Int)
 type LevelMap = Map Position Object
 
@@ -92,10 +92,10 @@ data GameState = GameState
         , gsLiftPosition        :: Position
         , gsTick                :: Int
         , gsAirLeft             :: Int
-        
+
         , gsTargets             :: Map Object Position   -- Target -> Position of Target
         , gsTargetSources       :: Map Object [Position] -- Target -> [Position of Trampoline]
-        
+
         , gsProgress            :: GameProgress
         , gsLambdasCollected    :: Int
         , gsMoves               :: Int
@@ -251,9 +251,9 @@ printLevelMap l = (sequence_ . printAList . levelToSortedAList) l >> setSGR [ Re
         where
         print' o y = printNoNl' o y >> putStrLn ""
         printNoNl' o y = do
-                if y > lvWater l then setSGR (objectColor o) else setSGR waterColor 
+                if y > lvWater l then setSGR (objectColor o) else setSGR waterColor
                 putChar . objectToChar $ o
-        
+
         printAList :: [(Position, Object)] -> [IO ()]
         printAList ls@(((x0,y0),o):((x1,_),_):_)
                 | x1 < x0 = print' o y0 : (printAList . tail) ls
@@ -263,7 +263,7 @@ printLevelMap l = (sequence_ . printAList . levelToSortedAList) l >> setSGR [ Re
 
         levelToSortedAList :: Level -> [(Position, Object)]
         levelToSortedAList = sortBy levelMapOutputSort . toList . lvMap
-        
+
         levelMapOutputSort (pos0,_) (pos1,_) = compareForLevelOutput pos0 pos1
 
 

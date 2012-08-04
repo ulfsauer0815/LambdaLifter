@@ -1,9 +1,9 @@
 module Input ( UserInput(..), getInput, showKeyMapping, showMoveHistory, printControls, askForAction, askForContinue, askForContinue_) where
 
-import Data.Char ( toLower )
-import Data.Maybe ( mapMaybe )
-import Data.Map ( Map, fromList, findWithDefault )
-import System.Console.ANSI ( SGR(..), BlinkSpeed(..), setSGR )
+import           Data.Char           (toLower)
+import           Data.Map            (Map, findWithDefault, fromList)
+import           Data.Maybe          (mapMaybe)
+import           System.Console.ANSI (BlinkSpeed(..), SGR(..), setSGR)
 
 data UserInput
         = UiLeft
@@ -56,7 +56,7 @@ showKeyMappingOfficial a = case a of
         UiWait    -> return 'W'
         UiAbort   -> return 'A'
         UiUseRazor-> return 'S'
-        
+
         UiRestart -> Nothing
         UiSkip    -> Nothing
         UiContinue-> Nothing
