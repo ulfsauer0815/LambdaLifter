@@ -15,7 +15,6 @@ You can find more information on the official site.
 - [Higher Order Rocks] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/horocks.pdf)
 
 ##Screenshots
-Splash-Screen
 
 ![Screenshot1](http://cloud.github.com/downloads/UlfS/LambdaLifter/ll4.png "Screenshot1")
 
