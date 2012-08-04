@@ -7,6 +7,13 @@ You can find more information on the official site.
 - [ICFP Programming Contest 2012 Official Site] (http://icfpcontest2012.wordpress.com/)
 - [Full specification] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/task.pdf)
 
+###Extensions
+
+- [Weather] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/weather.pdf)
+- [Trampolines] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/trampoline.pdf)
+- [Beards and Razors] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/beards.pdf)
+- [Higher Order Rocks] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/horocks.pdf)
+
 ##Screenshots
 Splash-Screen
 
@@ -17,13 +24,6 @@ Splash-Screen
 ![Screenshot3](http://cloud.github.com/downloads/UlfS/LambdaLifter/ll2.png "Screenshot3")
 
 ![Screenshot4](http://cloud.github.com/downloads/UlfS/LambdaLifter/ll0.png "Screenshot4")
-
-###Extensions
-
-- [Weather] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/weather.pdf)
-- [Trampolines] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/trampoline.pdf)
-- [Beards and Razors] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/beards.pdf)
-- [Higher Order Rocks] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/horocks.pdf)
 
 ##Installation
 Install Haskell and cabal ("Haskell package manager"), e.g.
