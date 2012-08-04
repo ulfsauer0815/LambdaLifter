@@ -15,6 +15,11 @@ You can find more information on the official site.
 - [Higher Order Rocks] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/horocks.pdf)
 
 ##Installation
+Install Haskell and cabal ("Haskell package manager"), e.g.
+
+    $ sudo apt-get install ghc cabal-install
+    $ cabal update
+
 Install required libraries
 
     $ cabal install mtl ansi-terminal
