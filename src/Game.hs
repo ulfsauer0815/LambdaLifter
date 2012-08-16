@@ -7,6 +7,7 @@ module Game ( Object(..), RockType(..), Position, LevelMap, Level(..), GameProgr
 where
 
 import           Control.Monad
+import           Data.Function       (on)
 import           Data.List           (sortBy)
 import           Data.Map            as M (Map, insert, null, toList)
 import           System.Console.ANSI (Color(..), ColorIntensity(..), ConsoleLayer(..), SGR(..), setSGR)
@@ -262,9 +263,7 @@ printLevelMap l = (sequence_ . printAList . levelToSortedAList) l >> setSGR [ Re
         printAList [] = [putStrLn ""]
 
         levelToSortedAList :: Level -> [(Position, Object)]
-        levelToSortedAList = sortBy levelMapOutputSort . toList . lvMap
-
-        levelMapOutputSort (pos0,_) (pos1,_) = compareForLevelOutput pos0 pos1
+        levelToSortedAList = sortBy (compareForLevelOutput `on` fst) . toList . lvMap
 
 
 compareForLevelOutput :: Position -> Position -> Ordering
