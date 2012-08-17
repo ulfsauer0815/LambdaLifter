@@ -14,6 +14,16 @@ You can find more information on the official site.
 - [Beards and Razors] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/beards.pdf)
 - [Higher Order Rocks] (http://www-fp.cs.st-andrews.ac.uk/~icfppc/horocks.pdf)
 
+##Screenshots
+
+![Screenshot1](http://cloud.github.com/downloads/UlfS/LambdaLifter/ll4.png "Screenshot1")
+
+![Screenshot2](http://cloud.github.com/downloads/UlfS/LambdaLifter/ll5.png "Screenshot2")
+
+![Screenshot3](http://cloud.github.com/downloads/UlfS/LambdaLifter/ll2.png "Screenshot3")
+
+![Screenshot4](http://cloud.github.com/downloads/UlfS/LambdaLifter/ll0.png "Screenshot4")
+
 ##Installation
 Install Haskell and cabal ("Haskell package manager"), e.g.
 
