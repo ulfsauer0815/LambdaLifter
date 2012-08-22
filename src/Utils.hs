@@ -17,7 +17,6 @@ listMap pairs =
     foldl insertPair empty (reverse pairs)
     where insertPair m (k,a) = insert k (a : findWithDefault [] k m) m
 
--- | Converts an associative 'List' (list of pairs) to a 'Map' with a 'List' of elements,
---   e.g. [(a,0), (b,1),(b,2)] to {a -> [0], b -> [1,2]}
+-- | Returns the value when the condition is met
 returnWhen :: MonadPlus m => Bool -> t -> m t
 returnWhen cond val = guard cond >> return val
