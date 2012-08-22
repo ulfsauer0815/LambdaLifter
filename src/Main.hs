@@ -42,12 +42,8 @@ defaultDelays = Delays
 
 createGame :: Level -> Maybe GameState
 createGame lvl = do
-        roboPos <- if size robos == 1
-                     then return . fst . elemAt 0 $ robos
-                     else Nothing
-        liftPos <- if size lifts == 1
-                     then return . fst . elemAt 0 $ lifts
-                     else Nothing
+        roboPos <- returnWhen (size robos == 1) $ fst . elemAt 0 $ robos
+        liftPos <- returnWhen (size lifts == 1) $ fst . elemAt 0 $ lifts
         return GameState
                 { gsLevel               = lvl { lvMap = insert roboPos Empty (lvMap lvl)} -- delete robot start position
                 , gsRobotPosition       = roboPos
