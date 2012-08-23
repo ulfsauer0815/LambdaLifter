@@ -11,6 +11,7 @@ executable LambdaLifter
                    base >= 4,
                    containers,
                    mtl,
-                   ansi-terminal
+                   ansi-terminal,
+                   filepath
   ghc-options:     -Wall
 

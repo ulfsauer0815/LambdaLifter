@@ -5,6 +5,8 @@ import           Data.Map            (Map, findWithDefault, fromList)
 import           Data.Maybe          (mapMaybe)
 import           System.Console.ANSI (BlinkSpeed(..), SGR(..), setSGR)
 
+
+-- | The actions available to a user
 data UserInput
         = UiLeft
         | UiRight
@@ -24,6 +26,7 @@ instance Show UserInput where
 
 -- Input processing
 
+-- | Reads the users keystokes until a valid action is found
 getInput :: IO UserInput
 getInput = do
         c <- getChar
@@ -31,8 +34,23 @@ getInput = do
         case input of
                 Nothing -> getInput
                 Just input' -> return input'
+        where
+        processInput :: Char -> Maybe UserInput
+        processInput c = case toLower c of
+                'w' -> return UiUp
+                'a' -> return UiLeft
+                's' -> return UiDown
+                'd' -> return UiRight
+                'e' -> return UiWait
+                'q' -> return UiAbort
+                'r' -> return UiRestart
+                'n' -> return UiSkip
+                ' ' -> return UiContinue
+                'x' -> return UiUseRazor
+                _   -> Nothing
 
 
+-- | The keymappings that can be printed in help messages
 showKeyMapping :: UserInput -> String
 showKeyMapping a = case a of
         UiUp      -> "W"
@@ -47,6 +65,7 @@ showKeyMapping a = case a of
         UiContinue-> "SPACE"
 
 
+-- | The "official" keymapping defined in the ICFP task specification
 showKeyMappingOfficial :: UserInput -> Maybe Char
 showKeyMappingOfficial a = case a of
         UiUp      -> return 'U'
@@ -61,25 +80,14 @@ showKeyMappingOfficial a = case a of
         UiSkip    -> Nothing
         UiContinue-> Nothing
 
+
+-- | Generates a String of the moves made with the official keymappings.
+--   Can be used to verify routes with the official validator
 showMoveHistory :: [UserInput] -> String
 showMoveHistory = mapMaybe showKeyMappingOfficial  . reverse
 
 
-processInput :: Char -> Maybe UserInput
-processInput c = case toLower c of
-        'w' -> return UiUp
-        'a' -> return UiLeft
-        's' -> return UiDown
-        'd' -> return UiRight
-        'e' -> return UiWait
-        'q' -> return UiAbort
-        'r' -> return UiRestart
-        'n' -> return UiSkip
-        ' ' -> return UiContinue
-        'x' -> return UiUseRazor
-        _   -> Nothing
-
-
+-- | Asks the User if he wants to continue and executes the corresponding IO actions
 askForContinue :: IO () -> IO () -> IO ()
 askForContinue actionAbort actionContinue
         = askForAction
@@ -87,7 +95,8 @@ askForContinue actionAbort actionContinue
                 $ "Press " ++ showKeyMapping UiContinue ++ " to continue."
 
 
--- (Map input (action to perform)) -> question to ask
+-- | Prints the text to the user and executes the IO actions depending on which one the user chose (defined in the map).
+--   (Map input (action to perform)) -> question to ask
 askForAction :: Map UserInput (IO ()) -> String -> IO ()
 askForAction actionMap text = do
         setSGR [SetBlinkSpeed SlowBlink]
@@ -100,10 +109,12 @@ askForAction actionMap text = do
                 findWithDefault getInput' a actionMap
 
 
+-- | Default "Press space to continue" question
 askForContinue_ :: IO () -> IO ()
 askForContinue_ = askForContinue (return ())
 
 
+-- | Prints the available user controls
 printControls :: IO ()
 printControls = do
         putStrLn "Controls: "

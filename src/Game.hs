@@ -1,12 +1,14 @@
-module Game ( Object(..), RockType(..), Position, LevelMap, Level(..), GameProgress(..), LossReason(..), GameState(..)
+module Game ( Object(..), RockType(..), LiftState(..), Position, LevelMap, Level(..), GameProgress(..), LossReason(..), GameState(..)
             , isTrampoline, isTarget, isBeard, isRock, isLambda, isHigherOrderRock, isSimpleRock
             , isLambdaLike, isEmpty, isWall, isEarth, isLiftOpen, isLiftClosed, isRazor
             , charToObject, objectToChar, objectColor, printLevel
             , sortForTraversal
-            , ObjectInitValues(..), LevelValues(..), defaultLevelValues)
+            , ObjectInitValues(..), LevelValues(..), defaultLevelValues
+            , Result, GameError(..))
 where
 
 import           Control.Monad
+import           Control.Monad.Error
 import           Data.Function       (on)
 import           Data.List           (sortBy)
 import           Data.Map            as M (Map, insert, null, toList)
@@ -16,13 +18,13 @@ import           Input               (UserInput)
 
 -- Data structures
 
+-- | Level objects
 data Object
         = Robot
         | Wall
         | Rock RockType
         | Lambda
-        | LiftOpen
-        | LiftClosed
+        | Lift LiftState
         | Earth
         | Trampoline Char
         | Target Char
@@ -31,28 +33,38 @@ data Object
         | Empty
         deriving (Eq, Ord)
 
+-- | Lift can be open or closed
+data LiftState
+        = Open
+        | Closed
+        deriving (Eq, Ord)
 
+-- | Rock level object
 data RockType
         = Simple
         | HigherOrder
         deriving (Eq, Ord)
 
 
-
+-- | Level position
 type Position = (Int, Int)
+-- | Level as a map of positions to objects 
 type LevelMap = Map Position Object
 
+-- | Level, containing the LevelMap and extension infos
 data Level = Level
-        { lvMap         :: LevelMap
-        , lvTrampolines :: Map Object Object -- Trampoline -> Target
-        , lvGrowthRate  :: Int
-        , lvRazors      :: Int
-        , lvLambdas     :: Int
-        , lvWater       :: Int
-        , lvFlooding    :: Int
-        , lvWaterproof  :: Int
+        { lvName        :: String               -- ^ Name of the level
+        , lvMap         :: LevelMap             -- ^ 2D-Level description
+        , lvTrampolines :: Map Object Object    -- ^ Trampoline to target mapping: Trampoline -> Target
+        , lvGrowthRate  :: Int                  -- ^ Beard growth rate
+        , lvRazors      :: Int                  -- ^ Number of razors available to the user
+        , lvLambdas     :: Int                  -- ^ Number of lambdas that have to be collected
+        , lvWater       :: Int                  -- ^ Water-level
+        , lvFlooding    :: Int                  -- ^ Flooding rate
+        , lvWaterproof  :: Int                  -- ^ Number of steps the robot can survive underwater
         }
 
+-- | LevelValues to initialize the Level with, like the beard growth rate etc. 
 data LevelValues = LevelValues
         { leBeardGrowthRate     :: Int
         , leRazors              :: Int
@@ -61,6 +73,7 @@ data LevelValues = LevelValues
         , leWaterproof          :: Int
         }
 
+-- | the default level values
 defaultLevelValues :: LevelValues
 defaultLevelValues = LevelValues
         { leBeardGrowthRate     = 25
@@ -71,6 +84,7 @@ defaultLevelValues = LevelValues
         }
 
 
+-- | Current progress of the game
 data GameProgress
         = Running
         | Win
@@ -81,29 +95,32 @@ data GameProgress
         deriving Eq
 
 
+-- | GameProgress -> Reason why the user lost the game
 data LossReason
         = FallingRock
         | Drowning
         deriving Eq
 
 
+-- | (Current) game state, inclusing the Level(map), position of the robot etc.
 data GameState = GameState
-        { gsLevel               :: Level
-        , gsRobotPosition       :: Position
-        , gsLiftPosition        :: Position
-        , gsTick                :: Int
-        , gsAirLeft             :: Int
+        { gsLevel               :: Level                        -- ^ Level
+        , gsRobotPosition       :: Position                     -- ^ Position of the robot in the level(map)
+        , gsLiftPosition        :: Position                     -- ^ Position of the lift in the level(map)
+        , gsTick                :: Int                          -- ^ Current game tick / game updates passed
+        , gsAirLeft             :: Int                          -- ^ Number of steps the robot has left underwater
 
-        , gsTargets             :: Map Object Position   -- Target -> Position of Target
-        , gsTargetSources       :: Map Object [Position] -- Target -> [Position of Trampoline]
+        , gsTargets             :: Map Object Position          -- ^ Mapping a target ot the position in the level(map): Target -> Position of Target
+        , gsTargetSources       :: Map Object [Position]        -- ^ Mapping of a target to a list of trampolines: Target -> [Position of Trampoline]
 
-        , gsProgress            :: GameProgress
-        , gsLambdasCollected    :: Int
-        , gsMoves               :: Int
-        , gsMoveHistory         :: [UserInput]
+        , gsProgress            :: GameProgress                 -- ^ Game progress, e.g. Running, Win, Loss
+        , gsLambdasCollected    :: Int                          -- ^ Number of lambdas the user collected
+        , gsMoves               :: Int                          -- ^ Number of moves made by the user
+        , gsMoveHistory         :: [UserInput]                  -- ^ the moves made by the user
         }
 
 
+-- | Object values needed at level construction time
 data ObjectInitValues = ObjectInitValues
         { oiBeardGrowthRate     :: Int
         }
@@ -111,6 +128,30 @@ data ObjectInitValues = ObjectInitValues
 
 instance Show Object where
         show = (:[]). objectToChar
+
+
+-- Error
+
+-- | Error in the game
+data GameError
+        = RuntimeError String                           -- ^ Generic runtime error
+        | LevelError String String                      -- ^ Error in the level description: levelname -> message
+        | InvalidCharacterError Char                    -- ^ Unknown character (in level description): character
+        | InvalidLevelCharacterError String Char        -- ^ Unknown character in level description: level -> character
+
+instance Show GameError where
+        show (RuntimeError msg)                 = "Error: " ++ msg
+        show (LevelError lvl msg)               = "Error loading level \"" ++ lvl ++ "\":" ++ msg
+        show (InvalidCharacterError c)          = "Error: Invalid character encountered: \"" ++ c : "\""
+        show (InvalidLevelCharacterError lvl c) = "Error loading level \"" ++ lvl ++ "\", invalid character encountered: \"" ++ c : "\""
+
+instance Error GameError where
+        noMsg   = RuntimeError "Unknown error"
+        strMsg  = RuntimeError
+
+-- | The Result type - either a error or the "real" value
+type Result = Either GameError
+
 
 -- Functions
 
@@ -127,11 +168,11 @@ isEarth Earth                   = True
 isEarth _                       = False
 
 isLiftOpen :: Object -> Bool
-isLiftOpen LiftOpen             = True
+isLiftOpen (Lift Open)          = True
 isLiftOpen _                    = False
 
 isLiftClosed :: Object -> Bool
-isLiftClosed LiftClosed         = True
+isLiftClosed (Lift Closed)      = True
 isLiftClosed _                  = False
 
 isTrampoline :: Object -> Bool
@@ -170,6 +211,7 @@ isSimpleRock (Rock Simple)              = True
 isSimpleRock _                          = False
 
 
+-- | Converts an object to the corresponding character
 objectToChar :: Object -> Char
 objectToChar o
         = case o of
@@ -178,8 +220,8 @@ objectToChar o
                 Rock Simple     -> '*'
                 Rock HigherOrder-> '@'
                 Lambda          -> '\\'
-                LiftClosed      -> 'L'
-                LiftOpen        -> 'O'
+                Lift Closed     -> 'L'
+                Lift Open       -> 'O'
                 Earth           -> '.'
                 Trampoline c    -> c
                 Target c        -> c
@@ -188,7 +230,9 @@ objectToChar o
                 Empty           -> ' '
 
 
-charToObject :: ObjectInitValues -> Char -> Maybe Object
+-- | Converts a character to the corresponding object,
+--   expects ObjectInitValues for e.g. the beard growth rate
+charToObject :: ObjectInitValues -> Char -> Result Object
 charToObject oiv c
         = case c of
                 'R'                     -> return Robot
@@ -196,17 +240,18 @@ charToObject oiv c
                 '*'                     -> return $ Rock Simple
                 '@'                     -> return $ Rock HigherOrder
                 '\\'                    -> return Lambda
-                'L'                     -> return LiftClosed
-                'O'                     -> return LiftOpen
+                'L'                     -> return $ Lift Closed
+                'O'                     -> return $ Lift Open
                 '.'                     -> return Earth
                 ' '                     -> return Empty
                 a | a `elem` ['A'..'I'] -> return $ Trampoline a
                   | a `elem` ['0'..'9'] -> return $ Target a
                 'W'                     -> return $ Beard $ oiBeardGrowthRate oiv
                 '!'                     -> return Razor
-                _                       -> Nothing
+                _                       -> throwError $ InvalidCharacterError c
 
 
+-- | Mapping of colors/styles to objects
 objectColor :: Object -> [SGR]
 objectColor o
         = case o of
@@ -214,8 +259,8 @@ objectColor o
                 Wall            -> []
                 Rock _          -> return $ SetColor Foreground Vivid Red
                 Lambda          -> return $ SetColor Foreground Dull Cyan
-                LiftClosed      -> return $ SetColor Foreground Dull Green
-                LiftOpen        -> return $ SetColor Foreground Vivid Green
+                Lift Closed     -> return $ SetColor Foreground Dull Green
+                Lift Open       -> return $ SetColor Foreground Vivid Green
                 Earth           -> []
                 Trampoline _    -> return $ SetColor Foreground Vivid Magenta
                 Target _        -> return $ SetColor Foreground Dull Magenta
@@ -224,11 +269,13 @@ objectColor o
                 Empty           -> []
 
 
+-- | the water color used for objects underwater
 waterColor :: [SGR]
 waterColor = return $ SetColor Foreground Vivid Blue
 
 -- Print functions for data structures
 
+-- | Prints the level - 2D level grid and metadata if necessary
 printLevel :: GameState -> IO ()
 printLevel gs = do
         unless (M.null trams) $ do
@@ -247,6 +294,7 @@ printLevel gs = do
         show' (tram, targ)      = show tram ++ " -> " ++ show targ
 
 
+-- | prints the 2D level(map)
 printLevelMap :: Level -> IO ()
 printLevelMap l = (sequence_ . printAList . levelToSortedAList) l >> setSGR [ Reset ]
         where
@@ -264,25 +312,26 @@ printLevelMap l = (sequence_ . printAList . levelToSortedAList) l >> setSGR [ Re
 
         levelToSortedAList :: Level -> [(Position, Object)]
         levelToSortedAList = sortBy (compareForLevelOutput `on` fst) . toList . lvMap
+        
+        -- Comparison function for printing the level(map)
+        compareForLevelOutput :: Position -> Position -> Ordering
+        compareForLevelOutput (x0,y0) (x1,y1)
+                | y0 < y1       = GT
+                | y0 > y1       = LT
+                | x0 > x1       = GT
+                | x0 < x1       = LT
+                | otherwise     = EQ
 
 
-compareForLevelOutput :: Position -> Position -> Ordering
-compareForLevelOutput (x0,y0) (x1,y1)
-        | y0 < y1       = GT
-        | y0 > y1       = LT
-        | x0 > x1       = GT
-        | x0 < x1       = LT
-        | otherwise     = EQ
-
-
-compareForLevelTraversal :: Position -> Position -> Ordering
-compareForLevelTraversal (x0,y0) (x1,y1)
-        | y0 < y1       = LT
-        | y0 > y1       = GT
-        | x0 < x1       = LT
-        | x0 > x1       = GT
-        | otherwise     = EQ
-
-
+-- | Sorting function for updating the level
 sortForTraversal :: [Position] -> [Position]
 sortForTraversal = sortBy compareForLevelTraversal
+        where
+        -- Comparison function for updating the gamestate
+        compareForLevelTraversal :: Position -> Position -> Ordering
+        compareForLevelTraversal (x0,y0) (x1,y1)
+                | y0 < y1       = LT
+                | y0 > y1       = GT
+                | x0 < x1       = LT
+                | x0 > x1       = GT
+                | otherwise     = EQ

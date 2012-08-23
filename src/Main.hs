@@ -2,6 +2,7 @@ module Main where
 
 import           Control.Concurrent  (threadDelay)
 import           Control.Monad.State
+import           Control.Monad.Error (throwError)
 import           Data.Map            as M (delete, elemAt, filter, fromList, insert, keys, keys, lookup,
                                            size, toList)
 import           Data.Maybe          (fromMaybe)
@@ -26,11 +27,13 @@ TODOs:
 --}
 
 
+-- | Delays for printing the level
 data Delays = Delays
         { deMapUpdate           :: Int
         , deMove                :: Int
         }
 
+-- | The default delays for printing the level etc.
 defaultDelays :: Delays
 defaultDelays = Delays
         { deMapUpdate           = 12500
@@ -40,10 +43,15 @@ defaultDelays = Delays
 
 -- Functions
 
-createGame :: Level -> Maybe GameState
+-- | Creates a game state from a level - or fails if the level description is invalid
+createGame :: Level -> Result GameState
 createGame lvl = do
-        roboPos <- returnWhen (size robos == 1) $ fst . elemAt 0 $ robos
-        liftPos <- returnWhen (size lifts == 1) $ fst . elemAt 0 $ lifts
+        roboPos <- if size robos == 1
+                     then return . fst . elemAt 0 $ robos
+                     else throwError $ LevelError (lvName lvl) "level does not contain exactly one robot"
+        liftPos <- if size lifts == 1
+                     then return . fst . elemAt 0 $ lifts
+                     else throwError $ LevelError (lvName lvl) "level does not contain exactly one lift"
         return GameState
                 { gsLevel               = lvl { lvMap = insert roboPos Empty (lvMap lvl)} -- delete robot start position
                 , gsRobotPosition       = roboPos
@@ -64,11 +72,12 @@ createGame lvl = do
         robos = M.filter (== Robot)      lmap
         trams = M.filter isTrampoline    lmap
         targs = M.filter isTarget        lmap
-        lifts = M.filter (== LiftClosed) lmap
+        lifts = M.filter isLiftClosed    lmap
         targetSourcePositions = listMap . filterMaybeTuples1 . map (\(pos,obj) -> (pos, lookup obj (revertMap trams)) ) . toList $ lvTrampolines lvl
         filterMaybeTuples1 ls = [(x,y) | (x, Just y) <- ls]
 
 
+-- | Starts a list of Games, expects delays for printing
 startGames :: Delays -> [GameState] -> IO ()
 startGames _ [] = putStrLn "You finished all levels! :)"
 startGames delays games@(game:nextGames) = do
@@ -110,6 +119,7 @@ startGames delays games@(game:nextGames) = do
                 putStrLn $ "Your route: " ++ showMoveHistory (gsMoveHistory g)
 
 
+-- | Calculated the points of the current game state as defined in the ICFP specification
 calculatePoints :: GameState -> Int
 calculatePoints gs
         = lambdas             * 25
@@ -123,6 +133,7 @@ calculatePoints gs
         lambdas         = gsLambdasCollected gs
 
 
+-- | plays the game interactively or plays a replay if a user input is given
 playGame :: Maybe [UserInput] -> Delays -> GameState -> IO GameState
 playGame (Just []) _   game = return game {gsProgress = if gsProgress game == Win then Win else Abort}
 playGame mMoves delays game = do
@@ -133,7 +144,7 @@ playGame mMoves delays game = do
                 dir <- case mMoves of
                   Nothing       -> getInput
                   Just (x:_)    -> threadDelay (deMove delays) >> return x
-                  Just []       -> error "playGame with Just [] - cannot happen" -- cannot happen, see first line
+                  Just []       -> error "playGame with Just [] - cannot happen" -- cannot happen, see first line pattern match
                 case dir of
                         UiAbort         -> return game {gsProgress = Abort}
                         UiRestart       -> return game {gsProgress = Restart}
@@ -162,6 +173,7 @@ playGame mMoves delays game = do
                 Nothing     -> Nothing
 
 
+-- | Moves the robot depending on the users input and produces a resulting GameState if the user didn't quit
 moveRobot :: GameState -> UserInput -> Maybe GameState
 moveRobot game dir = do
         let lvl = gsLevel game
@@ -190,7 +202,7 @@ moveRobot game dir = do
                                                 , gsRobotPosition = nrp
                                                 , gsMoves = gsMoves game + 1
                                                 , gsMoveHistory = addMove dir}
-                LiftOpen        -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Empty lmap}
+                (Lift Open)     -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Empty lmap}
                                                 , gsProgress = Win
                                                 , gsRobotPosition = nrp
                                                 , gsMoves = gsMoves game + 1
@@ -255,6 +267,7 @@ moveRobot game dir = do
         addMove m = m : gsMoveHistory game
 
 
+-- | The map update phase as described in the ICFP specification
 updateGameState :: GameState -> GameState
 updateGameState gs
         = updatedGS
@@ -299,6 +312,7 @@ updateGameState gs
                 (rX,rY)         = gsRobotPosition oldGs
 
 
+-- | Cell-wise update of the level(map) as described in the icfp specification
 processObject :: GameState -> GameState -> Object -> Position -> GameState
 processObject gs gs' o (x,y)
         = case o of
@@ -319,8 +333,8 @@ processObject gs gs' o (x,y)
                         && lookup (x+1, y)     lvl == Just Empty
                         && lookup (x+1, y-1)   lvl == Just Empty
                         -> modifyLevelMap $ insertFallingRock (x+1, y-1) rt lvl . insert (x,y) Empty $ lvl'
-                LiftClosed | gsLambdasCollected gs == (lvLambdas . gsLevel) gs
-                        -> modifyLevelMap $ insert (x,y) LiftOpen lvl'
+                (Lift Closed) | gsLambdasCollected gs == (lvLambdas . gsLevel) gs
+                        -> modifyLevelMap $ insert (x,y) (Lift Open) lvl'
                 -- Beards and Razors extension
                 Beard g | g > 0
                         -> modifyLevelMap $ insert (x, y) (Beard $ g-1) lvl'
@@ -354,15 +368,17 @@ processObject gs gs' o (x,y)
         insertIfEmpty (x',y') obj lmap = if lookup (x',y') lvl == Just Empty then insert (x',y') obj lmap else lmap -- note that lvl not lmap is used
 
 
-
+-- | Insers an object into the specified positions if certain condidions are met (as defined in the "conditional insert function")
 insertObjectIntoPositions :: (Position -> Object -> LevelMap -> LevelMap) -> Object -> LevelMap -> [Position] -> LevelMap
 insertObjectIntoPositions condInsert obj = foldl (flip (flip condInsert obj))
 
 
+-- | "Generic" conditional insert function
 conditionalInsert :: (Object -> Bool) -> Position -> Object -> LevelMap -> LevelMap
 conditionalInsert cond (x,y) obj lmap = if cond' $ lookup (x,y) lmap then insert (x,y) obj lmap else lmap
         where cond' = maybe False cond
 
+-- | Computes all adjacent position for a given position
 adjacentPositions :: Int -> Int -> [(Int,Int)]
 adjacentPositions x y = [(i,j) | i <- [x-1,x,x+1], j <- [y-1,y,y+1]]
 
@@ -371,27 +387,27 @@ adjacentPositions x y = [(i,j) | i <- [x-1,x,x+1], j <- [y-1,y,y+1]]
 
 main :: IO ()
 main = do
-        hSetEcho stdin False
-        hSetBuffering stdin NoBuffering
-        hideCursor
+        hSetEcho stdin False                    -- no echoing of characters on input
+        hSetBuffering stdin NoBuffering         -- disable buffering of input
+        hideCursor                              -- hide the cursor
 
         args <- getArgs
         lvlsM  <- mapM readLevelFile args
 
         case sequence lvlsM of
-                Nothing ->
-                        putStrLn "Error loading maps, invalid map format"
-                Just lvls -> do
+                Left err ->
+                        print err  -- Error loading maps, invalid map format
+                Right lvls -> do
                         let gamesM = mapM createGame lvls
                         case gamesM of
-                                Nothing -> putStrLn "Error creating levels, invalid properties"
-                                Just gs -> do
+                                Left err -> print err -- error loading level
+                                Right gs -> do
                                         clearScreen
                                         putStrLn "Welcome to LambdaLifter"
                                         putStrLn ""
                                         printControls
                                         askForContinue_ (startGames delays gs)
 
-        showCursor
+        showCursor                              -- reset the cursor
         where
         delays = defaultDelays
