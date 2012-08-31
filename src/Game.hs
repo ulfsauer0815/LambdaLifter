@@ -4,6 +4,7 @@ module Game ( Object(..), RockType(..), LiftState(..), Position, LevelMap, Level
             , level, robotPosition, liftPosition, tick, airLeft, targets, targetSources, progress, lambdasCollected, moves, moveHistory -- GameState lenses
             , isTrampoline, isTarget, isBeard, isRock, isLambda, isHigherOrderRock, isSimpleRock
             , isLambdaLike, isEmpty, isWall, isEarth, isLiftOpen, isLiftClosed, isRazor
+            , isWon, isLost, isAborted
             , charToObject, objectToChar, objectColor, printLevel
             , sortForTraversal
             , ObjectInitValues(..), LevelValues(..), defaultLevelValues
@@ -208,34 +209,44 @@ isLambda Lambda                 = True
 isLambda _                      = False
 
 isHigherOrderRock :: Object -> Bool
-isHigherOrderRock (Rock HigherOrder)    = True
-isHigherOrderRock _                     = False
+isHigherOrderRock (Rock HigherOrder) = True
+isHigherOrderRock _                  = False
 
 isLambdaLike :: Object -> Bool
 isLambdaLike o = isLambda o || isHigherOrderRock o
 
 isSimpleRock :: Object -> Bool
-isSimpleRock (Rock Simple)              = True
-isSimpleRock _                          = False
+isSimpleRock (Rock Simple)      = True
+isSimpleRock _                  = False
 
+isWon :: GameState -> Bool
+isWon gs = gs^.progress == Win
+
+isLost :: GameState -> Bool
+isLost gs = case gs^.progress of
+              Loss _            -> True
+              _                 -> False
+
+isAborted :: GameState -> Bool
+isAborted gs = gs^.progress == Abort
 
 -- | Converts an object to the corresponding character
 objectToChar :: Object -> Char
 objectToChar o
         = case o of
-                Robot           -> 'R'
-                Wall            -> '#'
-                Rock Simple     -> '*'
-                Rock HigherOrder-> '@'
-                Lambda          -> '\\'
-                Lift Closed     -> 'L'
-                Lift Open       -> 'O'
-                Earth           -> '.'
-                Trampoline c    -> c
-                Target c        -> c
-                Beard _         -> 'W'
-                Razor           -> '!'
-                Empty           -> ' '
+                Robot            -> 'R'
+                Wall             -> '#'
+                Rock Simple      -> '*'
+                Rock HigherOrder -> '@'
+                Lambda           -> '\\'
+                Lift Closed      -> 'L'
+                Lift Open        -> 'O'
+                Earth            -> '.'
+                Trampoline c     -> c
+                Target c         -> c
+                Beard _          -> 'W'
+                Razor            -> '!'
+                Empty            -> ' '
 
 
 -- | Converts a character to the corresponding object,
@@ -263,18 +274,18 @@ charToObject oiv c
 objectColor :: Object -> [SGR]
 objectColor o
         = case o of
-                Robot           -> return $ SetColor Foreground Dull Blue
-                Wall            -> []
-                Rock _          -> return $ SetColor Foreground Vivid Red
-                Lambda          -> return $ SetColor Foreground Dull Cyan
-                Lift Closed     -> return $ SetColor Foreground Dull Green
-                Lift Open       -> return $ SetColor Foreground Vivid Green
-                Earth           -> []
-                Trampoline _    -> return $ SetColor Foreground Vivid Magenta
-                Target _        -> return $ SetColor Foreground Dull Magenta
-                Beard _         -> []
-                Razor           -> []
-                Empty           -> []
+                Robot        -> return $ SetColor Foreground Dull Blue
+                Wall         -> []
+                Rock _       -> return $ SetColor Foreground Vivid Red
+                Lambda       -> return $ SetColor Foreground Dull Cyan
+                Lift Closed  -> return $ SetColor Foreground Dull Green
+                Lift Open    -> return $ SetColor Foreground Vivid Green
+                Earth        -> []
+                Trampoline _ -> return $ SetColor Foreground Vivid Magenta
+                Target _     -> return $ SetColor Foreground Dull Magenta
+                Beard _      -> []
+                Razor        -> []
+                Empty        -> []
 
 
 -- | the water color used for objects underwater
@@ -295,11 +306,11 @@ printLevel gs = do
                 putStrLn $ "Razors: " ++ show razorCount
         printLevelMap lvl
         where
-        lvl                     = levelMap ^%= insert (gs^.robotPosition) Robot $ gs^.level
-        trams                   = lvl^.trampolines 
-        air                     = gs^.airLeft
-        razorCount              = lvl^.razors
-        show' (tram, targ)      = show tram ++ " -> " ++ show targ
+        lvl                = levelMap ^%= insert (gs^.robotPosition) Robot $ gs^.level
+        trams              = lvl^.trampolines 
+        air                = gs^.airLeft
+        razorCount         = lvl^.razors
+        show' (tram, targ) = show tram ++ " -> " ++ show targ
 
 
 -- | prints the 2D level(map)
@@ -324,11 +335,11 @@ printLevelMap l = (sequence_ . printAList . levelToSortedAList) l >> setSGR [ Re
         -- Comparison function for printing the level(map)
         compareForLevelOutput :: Position -> Position -> Ordering
         compareForLevelOutput (x0,y0) (x1,y1)
-                | y0 < y1       = GT
-                | y0 > y1       = LT
-                | x0 > x1       = GT
-                | x0 < x1       = LT
-                | otherwise     = EQ
+                | y0 < y1   = GT
+                | y0 > y1   = LT
+                | x0 > x1   = GT
+                | x0 < x1   = LT
+                | otherwise = EQ
 
 
 -- | Sorting function for updating the level
@@ -338,8 +349,8 @@ sortForTraversal = sortBy compareForLevelTraversal
         -- Comparison function for updating the gamestate
         compareForLevelTraversal :: Position -> Position -> Ordering
         compareForLevelTraversal (x0,y0) (x1,y1)
-                | y0 < y1       = LT
-                | y0 > y1       = GT
-                | x0 < x1       = LT
-                | x0 > x1       = GT
-                | otherwise     = EQ
+                | y0 < y1   = LT
+                | y0 > y1   = GT
+                | x0 < x1   = LT
+                | x0 > x1   = GT
+                | otherwise = EQ
