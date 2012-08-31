@@ -1,11 +1,13 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Game --( Object(..), RockType(..), LiftState(..), Position, LevelMap, Level(..), GameProgress(..), LossReason(..), GameState(..)
-            --, isTrampoline, isTarget, isBeard, isRock, isLambda, isHigherOrderRock, isSimpleRock
-            --, isLambdaLike, isEmpty, isWall, isEarth, isLiftOpen, isLiftClosed, isRazor
-            --, charToObject, objectToChar, objectColor, printLevel
-            --, sortForTraversal
-            --, ObjectInitValues(..), LevelValues(..), defaultLevelValues
-            --, Result, GameError(..))
+module Game ( Object(..), RockType(..), LiftState(..), Position, LevelMap, Level(..), GameProgress(..), LossReason(..), GameState(..)
+            , name, levelMap, trampolines, growthRate, razors, lambdas, water, flooding, waterproof -- Level lenses
+            , level, robotPosition, liftPosition, tick, airLeft, targets, targetSources, progress, lambdasCollected, moves, moveHistory -- GameState lenses
+            , isTrampoline, isTarget, isBeard, isRock, isLambda, isHigherOrderRock, isSimpleRock
+            , isLambdaLike, isEmpty, isWall, isEarth, isLiftOpen, isLiftClosed, isRazor
+            , charToObject, objectToChar, objectColor, printLevel
+            , sortForTraversal
+            , ObjectInitValues(..), LevelValues(..), defaultLevelValues
+            , Result, GameError(..))
 where
 
 import           Data.Lens.Lazy
