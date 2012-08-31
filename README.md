@@ -32,7 +32,7 @@ Install Haskell and cabal ("Haskell package manager"), e.g.
 
 Install required libraries
 
-    $ cabal install mtl ansi-terminal
+    $ cabal install mtl ansi-terminal data-lens
 
 Compile source
 
@@ -41,5 +41,18 @@ Compile source
 Run with maps as arguments, e.g.
 
     $ ./Main ../maps/*.map
+
+
+## Troubleshooting
+
+If you have trouble compiling with the data-lens package, check if you have multiple *data-lens* packages installed and unregister other versions - this version has been tested with *data-lens-2.10.0*.
+
+Listing installed *data-lens* packages
+
+    $ ghc-pkg list | grep data-lens
+
+Unregistering a package, e.g data-lens-2.10.4
+
+    $ ghc-pkg unregister data-lens-2.10.4
 
 **Any sort of advice or criticism is very much appreciated!**
