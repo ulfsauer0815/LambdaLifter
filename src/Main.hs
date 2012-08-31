@@ -179,6 +179,10 @@ moveRobot :: GameState -> UserInput -> Maybe GameState
 moveRobot game dir = do
         let lvl = game^.level
         nrp   <- newRobotPosition
+        let defaultChanges = (robotPosition     ^= nrp) .
+                             (moves             ^%= (+1)) .
+                             (moveHistory       ^%= (dir:))
+        let clearPosition  = level             ^= (levelMap ^%= insert nrp Empty) (game ^. level)
         let lmap = lvl^.levelMap
         field <- lookup nrp lmap
         case field of
@@ -188,55 +192,39 @@ moveRobot game dir = do
                                                         ((levelMap  ^%= insertIntoAdjacentBeardCells nrp Empty) .
                                                          (razors    ^%= flip (-) 1)
                                                         $ game^.level)) .
-                                                (robotPosition     ^= nrp) .
-                                                (moves             ^%= (+1)) .
-                                                (moveHistory       ^%= (dir:))
+                                                defaultChanges
                                                 $ game
                 Empty   | dir /= UiUseRazor
-                                -> return $     (level             ^= (levelMap ^%= insert nrp Empty) (game ^. level)) .
-                                                (robotPosition     ^= nrp) .
-                                                (moves             ^%= (+1)) .
-                                                (moveHistory       ^%= (dir:))
+                                -> return $     defaultChanges
+                                                  game
+                Earth           -> return $     clearPosition .
+                                                defaultChanges
                                                 $ game
-                Earth           -> return $     (level             ^= (levelMap ^%= insert nrp Empty) (game ^. level)) .
-                                                (robotPosition     ^= nrp) .
-                                                (moves             ^%= (+1)) .
-                                                (moveHistory       ^%= (dir:))
-                                                $ game
-                Lambda          -> return $     (level             ^= (levelMap ^%= insert nrp Empty) (game ^. level)) .
+                Lambda          -> return $     clearPosition .
                                                 (lambdasCollected  ^%= (+1)) .
-                                                (robotPosition     ^= nrp) .
-                                                (moves             ^%= (+1)) .
-                                                (moveHistory       ^%= (dir:))
+                                                defaultChanges
                                                 $ game
-                (Lift Open)     -> return $     (level             ^= (levelMap ^%= insert nrp Empty) (game ^. level)) .
+                (Lift Open)     -> return $     clearPosition .
                                                 (progress          ^= Win) .
-                                                (robotPosition     ^= nrp) .
-                                                (moves             ^%= (+1)) .
-                                                (moveHistory       ^%= (dir:))
+                                                defaultChanges
                                                 $ game
                 Rock rt |  dir == UiRight
                         && lookup (rX+2, rY) (lvl^.levelMap) == Just Empty
                                 -> return $     (level             ^= (levelMap ^%= insert (rX+2, rY) (Rock rt) . insert nrp Empty) (game ^. level)) .
-                                                (robotPosition     ^= nrp) .
-                                                (moves             ^%= (+1)) .
-                                                (moveHistory       ^%= (dir:))
+                                                defaultChanges
                                                 $ game
                 Rock rt |  dir == UiLeft
                         && lookup (rX-2, rY) (lvl^.levelMap) == Just Empty
                                 -> return $     (level             ^= (levelMap ^%= insert (rX-2, rY) (Rock rt) . insert nrp Empty) (game ^. level)) .
-                                                (robotPosition     ^= nrp) .
-                                                (moves             ^%= (+1)) .
-                                                (moveHistory       ^%= (dir:))
+                                                defaultChanges
                                                 $ game
                 tc@(Trampoline _)
                                 -> return $     (level             ^=
                                                         ((levelMap  ^%= removeTargetIfNoOtherTrampsTargetIt . insert nrp Empty) .
                                                          (trampolines ^%= delete tc) -- TODO: update 2 remaining maps?
                                                         $ game^.level)) .
-                                                (robotPosition     ^= roboPosTrampoline) .
-                                                (moves             ^%= (+1)) .
-                                                (moveHistory       ^%= (dir:))
+                                                (robotPosition     ^= roboPosTrampoline) . -- "overwrites" default change of robot position
+                                                defaultChanges
                                                 $ game
                         where
                         lvlTramps       = lvl^.trampolines
@@ -244,7 +232,7 @@ moveRobot game dir = do
                         removeTargetIfNoOtherTrampsTargetIt
                                 = maybe
                                         id -- No Target for Trampoline found
-                                        (\target -> if (>=1) . size . M.filter (==target) $ lvlTrampsNew then id else insert roboPosTrampoline Empty)
+                                        (\target -> if (>=1) . size . M.filter (==target) $ lvlTrampsNew then id else insert roboPosTrampoline Empty) -- TODO: update 2 remaining maps?
                                         (lookup tc lvlTramps)
                         roboPosTrampoline
                                 = fromMaybe
@@ -254,13 +242,8 @@ moveRobot game dir = do
                                                 lookup targ (game^.targets))
 
                 Razor
-                                -> return $     (level             ^=
-                                                        ((levelMap  ^%= insert nrp Empty) .
-                                                         (razors ^%= (+1)) -- TODO: update 2 remaining maps?
-                                                        $ game^.level)) .
-                                                (robotPosition     ^= nrp) .
-                                                (moves             ^%= (+1)) .
-                                                (moveHistory       ^%= (dir:))
+                                -> return $     (level ^= (razors ^%= (+ 1)) (clearPosition game ^. level)) .
+                                                defaultChanges
                                                 $ game
 
                 _   | dir == UiWait
