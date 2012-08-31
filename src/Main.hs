@@ -1,5 +1,6 @@
 module Main where
 
+import           Data.Lens.Lazy
 import           Control.Concurrent  (threadDelay)
 import           Control.Monad.State
 import           Control.Monad.Error (throwError)
@@ -48,32 +49,32 @@ createGame :: Level -> Result GameState
 createGame lvl = do
         roboPos <- if size robos == 1
                      then return . fst . elemAt 0 $ robos
-                     else throwError $ LevelError (lvName lvl) "level does not contain exactly one robot"
+                     else throwError $ LevelError (lvl^.name) "level does not contain exactly one robot"
         liftPos <- if size lifts == 1
                      then return . fst . elemAt 0 $ lifts
-                     else throwError $ LevelError (lvName lvl) "level does not contain exactly one lift"
+                     else throwError $ LevelError (lvl^.name) "level does not contain exactly one lift"
         return GameState
-                { gsLevel               = lvl { lvMap = insert roboPos Empty (lvMap lvl)} -- delete robot start position
-                , gsRobotPosition       = roboPos
-                , gsLiftPosition        = liftPos
-                , gsTick                = 0
-                , gsAirLeft             = lvWaterproof lvl
+                { _level               = levelMap ^= insert roboPos Empty (lvl^.levelMap) $ lvl -- delete robot start position
+                , _robotPosition       = roboPos
+                , _liftPosition        = liftPos
+                , _tick                = 0
+                , _airLeft             = lvl^.waterproof
 
-                , gsTargets             = revertMap targs
-                , gsTargetSources       = targetSourcePositions
+                , _targets             = revertMap targs
+                , _targetSources       = targetSourcePositions
 
-                , gsProgress            = Running
-                , gsLambdasCollected    = 0
-                , gsMoves               = 0
-                , gsMoveHistory         = [] -- head is the most recent move
+                , _progress            = Running
+                , _lambdasCollected    = 0
+                , _moves               = 0
+                , _moveHistory         = [] -- head is the most recent move
                 }
         where
-        lmap   = lvMap lvl
+        lmap   = lvl^.levelMap
         robos = M.filter (== Robot)      lmap
         trams = M.filter isTrampoline    lmap
         targs = M.filter isTarget        lmap
         lifts = M.filter isLiftClosed    lmap
-        targetSourcePositions = listMap . filterMaybeTuples1 . map (\(pos,obj) -> (pos, lookup obj (revertMap trams)) ) . toList $ lvTrampolines lvl
+        targetSourcePositions = listMap . filterMaybeTuples1 . map (\(pos,obj) -> (pos, lookup obj (revertMap trams)) ) . toList $ lvl^.trampolines
         filterMaybeTuples1 ls = [(x,y) | (x, Just y) <- ls]
 
 
@@ -83,9 +84,9 @@ startGames _ [] = putStrLn "You finished all levels! :)"
 startGames delays games@(game:nextGames) = do
         game' <- playGame Nothing delays game
 
-        let replay      = playGame (Just $ reverse (gsMoveHistory game')) delays game
+        let replay      = playGame (Just $ reverse (game'^.moveHistory)) delays game
 
-        case gsProgress game' of
+        case game'^.progress of
                 Restart         -> restartLevel
                 Loss reason     -> do
                                         let msg = case reason of
@@ -116,39 +117,39 @@ startGames delays games@(game:nextGames) = do
         continueGames   = startGames delays nextGames
         printStats g= do
                 putStrLn $ "Points: "     ++ show            (calculatePoints g)
-                putStrLn $ "Your route: " ++ showMoveHistory (gsMoveHistory g)
+                putStrLn $ "Your route: " ++ showMoveHistory (g^.moveHistory)
 
 
 -- | Calculated the points of the current game state as defined in the ICFP specification
 calculatePoints :: GameState -> Int
 calculatePoints gs
-        = lambdas             * 25
-        + moves               * (-1)
-        + isWon     * lambdas * 50
-        + isAborted * lambdas * 25
+        = lambdaCount               * 25
+        + moveCount                 * (-1)
+        + isWon       * lambdaCount * 50
+        + isAborted   * lambdaCount * 25
         where
-        isWon           = fromEnum $ gsProgress gs == Win
-        isAborted       = fromEnum $ gsProgress gs == Abort
-        moves           = gsMoves gs
-        lambdas         = gsLambdasCollected gs
+        isWon           = fromEnum $ gs^.progress == Win
+        isAborted       = fromEnum $ gs^.progress == Abort
+        moveCount       = gs^.moves
+        lambdaCount     = gs^.lambdasCollected
 
 
 -- | plays the game interactively or plays a replay if a user input is given
 playGame :: Maybe [UserInput] -> Delays -> GameState -> IO GameState
-playGame (Just []) _   game = return game {gsProgress = if gsProgress game == Win then Win else Abort}
+playGame (Just []) _   game = return $ progress ^%= (\p -> if p == Win then Win else Abort) $ game
 playGame mMoves delays game = do
         clearScreen
         printLevel game
-        if gsProgress game == Running
+        if game^.progress == Running
           then do
                 dir <- case mMoves of
                   Nothing       -> getInput
                   Just (x:_)    -> threadDelay (deMove delays) >> return x
                   Just []       -> error "playGame with Just [] - cannot happen" -- cannot happen, see first line pattern match
                 case dir of
-                        UiAbort         -> return game {gsProgress = Abort}
-                        UiRestart       -> return game {gsProgress = Restart}
-                        UiSkip          -> return game {gsProgress = Skip}
+                        UiAbort         -> return $ progress ^= Abort   $ game
+                        UiRestart       -> return $ progress ^= Restart $ game
+                        UiSkip          -> return $ progress ^= Skip    $ game
                         _               ->
                                 case moveRobot game dir of
                                         Nothing   -> playGame mMoves delays game
@@ -158,7 +159,7 @@ playGame mMoves delays game = do
                                                 -- no update after a win
                                                 --    otherwise a rock may fall onto the OpenLift the Robot just stepped into, or
                                                 --    or the Robot may drown after stepping into the OpenLift
-                                                if gsProgress game' == Win
+                                                if game'^.progress == Win
                                                   then playGame tailMoves delays game'
                                                   else do
                                                         let game''   = updateGameState game'
@@ -176,57 +177,69 @@ playGame mMoves delays game = do
 -- | Moves the robot depending on the users input and produces a resulting GameState if the user didn't quit
 moveRobot :: GameState -> UserInput -> Maybe GameState
 moveRobot game dir = do
-        let lvl = gsLevel game
+        let lvl = game^.level
         nrp   <- newRobotPosition
-        field <- lookup nrp $ lvMap lvl
-        let lmap = lvMap lvl
+        let lmap = lvl^.levelMap
+        field <- lookup nrp lmap
         case field of
                 Empty   |  dir == UiUseRazor
-                    && lvRazors lvl > 0
-                                -> return game  { gsLevel = (gsLevel game) { lvMap = insertIntoAdjacentBeardCells nrp Empty lmap
-                                                                           , lvRazors = lvRazors lvl - 1}
-                                                , gsRobotPosition = nrp
-                                                , gsMoves = gsMoves game + 1
-                                                , gsMoveHistory = addMove dir}
+                    && lvl^.razors > 0
+                                -> return $     (level             ^=
+                                                        ((levelMap  ^%= insertIntoAdjacentBeardCells nrp Empty) .
+                                                         (razors    ^%= flip (-) 1)
+                                                        $ game^.level)) .
+                                                (robotPosition     ^= nrp) .
+                                                (moves             ^%= (+1)) .
+                                                (moveHistory       ^%= (dir:))
+                                                $ game
                 Empty   | dir /= UiUseRazor
-                                -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Empty lmap}
-                                                , gsRobotPosition = nrp
-                                                , gsMoves = gsMoves game + 1
-                                                , gsMoveHistory = addMove dir}
-                Earth           -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Empty lmap}
-                                                , gsRobotPosition = nrp
-                                                , gsMoves = gsMoves game + 1
-                                                , gsMoveHistory = addMove dir}
-                Lambda          -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Empty lmap}
-                                                , gsLambdasCollected = gsLambdasCollected game + 1
-                                                , gsRobotPosition = nrp
-                                                , gsMoves = gsMoves game + 1
-                                                , gsMoveHistory = addMove dir}
-                (Lift Open)     -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Empty lmap}
-                                                , gsProgress = Win
-                                                , gsRobotPosition = nrp
-                                                , gsMoves = gsMoves game + 1
-                                                , gsMoveHistory = addMove dir}
+                                -> return $     (level             ^= (levelMap ^%= insert nrp Empty) (game ^. level)) .
+                                                (robotPosition     ^= nrp) .
+                                                (moves             ^%= (+1)) .
+                                                (moveHistory       ^%= (dir:))
+                                                $ game
+                Earth           -> return $     (level             ^= (levelMap ^%= insert nrp Empty) (game ^. level)) .
+                                                (robotPosition     ^= nrp) .
+                                                (moves             ^%= (+1)) .
+                                                (moveHistory       ^%= (dir:))
+                                                $ game
+                Lambda          -> return $     (level             ^= (levelMap ^%= insert nrp Empty) (game ^. level)) .
+                                                (lambdasCollected  ^%= (+1)) .
+                                                (robotPosition     ^= nrp) .
+                                                (moves             ^%= (+1)) .
+                                                (moveHistory       ^%= (dir:))
+                                                $ game
+                (Lift Open)     -> return $     (level             ^= (levelMap ^%= insert nrp Empty) (game ^. level)) .
+                                                (progress          ^= Win) .
+                                                (robotPosition     ^= nrp) .
+                                                (moves             ^%= (+1)) .
+                                                (moveHistory       ^%= (dir:))
+                                                $ game
                 Rock rt |  dir == UiRight
-                        && lookup (rX+2, rY) (lvMap lvl) == Just Empty
-                                -> return game  { gsLevel = (gsLevel game) { lvMap = insert (rX+2, rY) (Rock rt) . insert nrp Empty $ lmap}
-                                                , gsRobotPosition = nrp
-                                                , gsMoves = gsMoves game + 1
-                                                , gsMoveHistory = addMove dir}
+                        && lookup (rX+2, rY) (lvl^.levelMap) == Just Empty
+                                -> return $     (level             ^= (levelMap ^%= insert (rX+2, rY) (Rock rt) . insert nrp Empty) (game ^. level)) .
+                                                (robotPosition     ^= nrp) .
+                                                (moves             ^%= (+1)) .
+                                                (moveHistory       ^%= (dir:))
+                                                $ game
                 Rock rt |  dir == UiLeft
-                        && lookup (rX-2, rY) (lvMap lvl) == Just Empty
-                                -> return game  { gsLevel = (gsLevel game) { lvMap = insert (rX-2, rY) (Rock rt) . insert nrp Empty $ lmap}
-                                                , gsRobotPosition = nrp
-                                                , gsMoves = gsMoves game + 1
-                                                , gsMoveHistory = addMove dir}
+                        && lookup (rX-2, rY) (lvl^.levelMap) == Just Empty
+                                -> return $     (level             ^= (levelMap ^%= insert (rX-2, rY) (Rock rt) . insert nrp Empty) (game ^. level)) .
+                                                (robotPosition     ^= nrp) .
+                                                (moves             ^%= (+1)) .
+                                                (moveHistory       ^%= (dir:))
+                                                $ game
                 tc@(Trampoline _)
-                                -> return game  { gsLevel = (gsLevel game) { lvMap = removeTargetIfNoOtherTrampsTargetIt . insert nrp Empty $ lmap
-                                                                           , lvTrampolines = lvlTrampsNew} -- TODO: update 2 remaining maps?
-                                                , gsRobotPosition = roboPosTrampoline
-                                                , gsMoves = gsMoves game + 1
-                                                , gsMoveHistory = addMove dir}
+                                -> return $     (level             ^=
+                                                        ((levelMap  ^%= removeTargetIfNoOtherTrampsTargetIt . insert nrp Empty) .
+                                                         (trampolines ^%= delete tc) -- TODO: update 2 remaining maps?
+                                                        $ game^.level)) .
+                                                (robotPosition     ^= roboPosTrampoline) .
+                                                (moves             ^%= (+1)) .
+                                                (moveHistory       ^%= (dir:))
+                                                $ game
                         where
-                        lvlTramps       = lvTrampolines lvl
+                        lvlTramps       = lvl^.trampolines
                         lvlTrampsNew    = delete tc lvlTramps
                         removeTargetIfNoOtherTrampsTargetIt
                                 = maybe
@@ -238,19 +251,22 @@ moveRobot game dir = do
                                         nrp
                                         (do -- Maybe monad
                                                 targ <- lookup tc lvlTramps
-                                                lookup targ (gsTargets game))
+                                                lookup targ (game^.targets))
 
                 Razor
-                                -> return game  { gsLevel = (gsLevel game) { lvMap = insert nrp Empty lmap
-                                                                           , lvRazors = lvRazors lvl + 1}
-                                                , gsRobotPosition = nrp
-                                                , gsMoves = gsMoves game + 1
-                                                , gsMoveHistory = addMove dir}
+                                -> return $     (level             ^=
+                                                        ((levelMap  ^%= insert nrp Empty) .
+                                                         (razors ^%= (+1)) -- TODO: update 2 remaining maps?
+                                                        $ game^.level)) .
+                                                (robotPosition     ^= nrp) .
+                                                (moves             ^%= (+1)) .
+                                                (moveHistory       ^%= (dir:))
+                                                $ game
 
                 _   | dir == UiWait
                                 -> return game
                 _   | dir == UiAbort
-                                -> return game  { gsProgress = Abort}
+                                -> return $ (progress ^= Abort) game
                 _               -> Nothing
         where
         newRobotPosition= case dir of
@@ -259,33 +275,29 @@ moveRobot game dir = do
                 UiDown          -> Just (rX   ,rY-1)
                 UiRight         -> Just (rX+1 ,rY  )
                 _               -> Just (rX   ,rY  ) -- use Nothing to produce an invalid GameState
-        (rX, rY) = gsRobotPosition game
+        (rX, rY) = game^.robotPosition
 
         insertIntoAdjacentBeardCells :: Position -> Object -> LevelMap -> LevelMap
         insertIntoAdjacentBeardCells (x,y) obj lvlMap = insertObjectIntoPositions (conditionalInsert isBeard) obj lvlMap (adjacentPositions x y)
-
-        addMove m = m : gsMoveHistory game
 
 
 -- | The map update phase as described in the ICFP specification
 updateGameState :: GameState -> GameState
 updateGameState gs
-        = updatedGS
-                { gsTick        = thisTick
-                , gsProgress    = case () of -- dirty multi-way if, can't wait for ghc 7.5
-                                        _ | gsAirLeft updatedGS < 0             -> Loss Drowning        -- robot may drown
-                                          | robotGotCrushed gs updatedGS        -> Loss FallingRock     -- robot may get crushed by a rock
-                                          | otherwise                           -> gsProgress updatedGS -- no change
-                , gsLevel = (gsLevel updatedGS) { lvWater = newWater }
-                }
+        = (tick         ^= thisTick) .
+          (progress     ^= case () of -- dirty multi-way if, can't wait for ghc 7.5
+                                        _ | updatedGS^.airLeft  < 0             -> Loss Drowning           -- robot may drown
+                                          | robotGotCrushed gs updatedGS        -> Loss FallingRock        -- robot may get crushed by a rock
+                                          | otherwise                           -> updatedGS^.progress) .  -- no change)
+          (level        ^= ( water ^= newWater $ updatedGS^.level))
+          $ updatedGS
         where
-        thisTick     = gsTick updatedGS + 1
+        thisTick     = updatedGS^.tick + 1
         --gs'          = gs { gsLevel = (gsLevel gs) { lvWater = newWater } }
         updatedGS    = execState (updateLevel keysToUpdate gs) gs -- gs instead of gs' -> robot underwater after map update instead of instantly
-        updatedLvl   = gsLevel updatedGS
-        water        = lvWater updatedLvl
-        newWater     = water + if flooding /= 0 && thisTick `mod` flooding == 0 then 1 else 0
-        flooding     = lvFlooding updatedLvl
+        updatedLvl   = updatedGS^.level
+        newWater     = updatedLvl^.water + if floodingRate /= 0 && thisTick `mod` floodingRate == 0 then 1 else 0
+        floodingRate = updatedLvl^.flooding
 
         updateLevel :: [Position] -> GameState -> State GameState GameState
         updateLevel [] _ = get
@@ -293,23 +305,23 @@ updateGameState gs
                 modify $ flip (updateLevelByPosition lvl) pos
                 updateLevel poss lvl
 
-        keysToUpdate = sortForTraversal . keys . lvMap . gsLevel $ gs
+        keysToUpdate = sortForTraversal . keys $ gs^.level^.levelMap
 
         updateLevelByPosition :: GameState -> GameState -> Position -> GameState
         updateLevelByPosition g g' pos
                 = case lookup pos lvlMap of
                         Nothing -> g'
                         Just e -> processObject g g' e pos
-                where lvlMap = insert (gsRobotPosition gs) Robot . lvMap . gsLevel $ g
+                where lvlMap = insert (gs^.robotPosition) Robot $ g^.level^.levelMap
 
         robotGotCrushed oldGs newGs
                 = not (isRockOrLambda' aboveOld)
                      && isRockOrLambda' aboveNew
                 where
                 isRockOrLambda' = maybe False (\o -> isRock o || isLambda o)
-                aboveOld        = lookup (rX,rY+1) $ lvMap . gsLevel $ oldGs
-                aboveNew        = lookup (rX,rY+1) $ lvMap . gsLevel $ newGs
-                (rX,rY)         = gsRobotPosition oldGs
+                aboveOld        = lookup (rX,rY+1) $ oldGs^.level^.levelMap
+                aboveNew        = lookup (rX,rY+1) $ newGs^.level^.levelMap
+                (rX,rY)         = oldGs^.robotPosition
 
 
 -- | Cell-wise update of the level(map) as described in the icfp specification
@@ -317,35 +329,37 @@ processObject :: GameState -> GameState -> Object -> Position -> GameState
 processObject gs gs' o (x,y)
         = case o of
                 Rock rt |  lookup (x, y-1)     lvl == Just Empty
-                        -> modifyLevelMap $ insertFallingRock (x, y-1) rt lvl . insert (x,y) Empty $ lvl'
+                        -> modifyLevelMap $ insertFallingRock (x, y-1) rt lvl . insert (x,y) Empty
                 Rock rt |  (isRock' . lookup (x, y-1)) lvl
                         && lookup (x+1, y)     lvl == Just Empty
                         && lookup (x+1, y-1)   lvl == Just Empty
-                        -> modifyLevelMap $ insertFallingRock (x+1, y-1) rt lvl . insert (x,y) Empty $ lvl'
+                        -> modifyLevelMap $ insertFallingRock (x+1, y-1) rt lvl . insert (x,y) Empty
                 Rock rt |  (isRock' . lookup (x, y-1)) lvl
                         && (  lookup (x+1, y)   lvl /= Just Empty
                            || lookup (x+1, y-1) lvl /= Just Empty
                            )
                         && lookup (x-1, y)     lvl == Just Empty
                         && lookup (x-1, y-1)   lvl == Just Empty
-                        -> modifyLevelMap $ insert (x-1, y-1) (Rock rt) . insert (x,y) Empty $ lvl'
+                        -> modifyLevelMap $ insert (x-1, y-1) (Rock rt) . insert (x,y) Empty
                 Rock rt |  lookup (x, y-1)     lvl == Just Lambda
                         && lookup (x+1, y)     lvl == Just Empty
                         && lookup (x+1, y-1)   lvl == Just Empty
-                        -> modifyLevelMap $ insertFallingRock (x+1, y-1) rt lvl . insert (x,y) Empty $ lvl'
-                (Lift Closed) | gsLambdasCollected gs == (lvLambdas . gsLevel) gs
-                        -> modifyLevelMap $ insert (x,y) (Lift Open) lvl'
+                        -> modifyLevelMap $ insertFallingRock (x+1, y-1) rt lvl . insert (x,y) Empty
+                (Lift Closed) | gs^.lambdasCollected == gs^.level^.lambdas
+                        -> modifyLevelMap $ insert (x,y) (Lift Open)
                 -- Beards and Razors extension
                 Beard g | g > 0
-                        -> modifyLevelMap $ insert (x, y) (Beard $ g-1) lvl'
+                        -> modifyLevelMap $ insert (x, y) (Beard $ g-1)
                 Beard _
-                        -> modifyLevelMap $ insert (x,y) beardInit . insertIntoAdjacentEmptyCells (x, y) beardInit $ lvl'
+                        -> modifyLevelMap $ insert (x,y) beardInit . insertIntoAdjacentEmptyCells (x, y) beardInit
                 -- Flooding extension
-                Robot   -> gs' { gsAirLeft = if (lvWater . gsLevel) gs >= y then airLeft - 1 else (lvWaterproof . gsLevel) gs}
+                Robot   -> (airLeft ^= if gs^.level^.water >= y then air - 1 else gs^.level^.waterproof) gs'
 
-                _       -> modifyLevelMap lvl'
+                _       -> gs'
         where
-        modifyLevelMap lvlMap = gs' { gsLevel = (gsLevel gs') { lvMap = lvlMap}}
+        modifyLevelMap f = (level ^=
+                                   (levelMap ^%= f) (gs ^. level)
+                                ) gs'
 
         insertFallingRock :: Position -> RockType -> LevelMap -> LevelMap -> LevelMap
         insertFallingRock pos@(rX,rY) rt l l'
@@ -355,11 +369,10 @@ processObject gs gs' o (x,y)
                                                 Simple          -> insert pos (Rock rt) l'
                                                 HigherOrder     -> insert pos Lambda    l'
 
-        airLeft = gsAirLeft gs'
+        air = gs'^.airLeft
         isRock' = maybe False isRock
-        lvl  = insert (gsRobotPosition gs) Robot . lvMap . gsLevel $ gs
-        lvl' = lvMap . gsLevel $ gs'
-        beardInit = Beard $ (lvGrowthRate . gsLevel) gs -1
+        lvl  = insert (gs^.robotPosition) Robot $ gs^.level^.levelMap
+        beardInit = Beard $ gs^.level^.growthRate -1
 
         insertIntoAdjacentEmptyCells :: Position -> Object -> LevelMap -> LevelMap
         insertIntoAdjacentEmptyCells (x',y') obj lvlMap = insertObjectIntoPositions insertIfEmpty obj lvlMap (adjacentPositions x' y')

@@ -1,12 +1,15 @@
-module Game ( Object(..), RockType(..), LiftState(..), Position, LevelMap, Level(..), GameProgress(..), LossReason(..), GameState(..)
-            , isTrampoline, isTarget, isBeard, isRock, isLambda, isHigherOrderRock, isSimpleRock
-            , isLambdaLike, isEmpty, isWall, isEarth, isLiftOpen, isLiftClosed, isRazor
-            , charToObject, objectToChar, objectColor, printLevel
-            , sortForTraversal
-            , ObjectInitValues(..), LevelValues(..), defaultLevelValues
-            , Result, GameError(..))
+{-# LANGUAGE TemplateHaskell #-}
+module Game --( Object(..), RockType(..), LiftState(..), Position, LevelMap, Level(..), GameProgress(..), LossReason(..), GameState(..)
+            --, isTrampoline, isTarget, isBeard, isRock, isLambda, isHigherOrderRock, isSimpleRock
+            --, isLambdaLike, isEmpty, isWall, isEarth, isLiftOpen, isLiftClosed, isRazor
+            --, charToObject, objectToChar, objectColor, printLevel
+            --, sortForTraversal
+            --, ObjectInitValues(..), LevelValues(..), defaultLevelValues
+            --, Result, GameError(..))
 where
 
+import           Data.Lens.Lazy
+import           Data.Lens.Template (makeLenses)
 import           Control.Monad
 import           Control.Monad.Error
 import           Data.Function       (on)
@@ -53,15 +56,15 @@ type LevelMap = Map Position Object
 
 -- | Level, containing the LevelMap and extension infos
 data Level = Level
-        { lvName        :: String               -- ^ Name of the level
-        , lvMap         :: LevelMap             -- ^ 2D-Level description
-        , lvTrampolines :: Map Object Object    -- ^ Trampoline to target mapping: Trampoline -> Target
-        , lvGrowthRate  :: Int                  -- ^ Beard growth rate
-        , lvRazors      :: Int                  -- ^ Number of razors available to the user
-        , lvLambdas     :: Int                  -- ^ Number of lambdas that have to be collected
-        , lvWater       :: Int                  -- ^ Water-level
-        , lvFlooding    :: Int                  -- ^ Flooding rate
-        , lvWaterproof  :: Int                  -- ^ Number of steps the robot can survive underwater
+        { _name        :: String               -- ^ Name of the level
+        , _levelMap    :: LevelMap             -- ^ 2D-Level description
+        , _trampolines :: Map Object Object    -- ^ Trampoline to target mapping: Trampoline -> Target
+        , _growthRate  :: Int                  -- ^ Beard growth rate
+        , _razors      :: Int                  -- ^ Number of razors available to the user
+        , _lambdas     :: Int                  -- ^ Number of lambdas that have to be collected
+        , _water       :: Int                  -- ^ Water-level
+        , _flooding    :: Int                  -- ^ Flooding rate
+        , _waterproof  :: Int                  -- ^ Number of steps the robot can survive underwater
         }
 
 -- | LevelValues to initialize the Level with, like the beard growth rate etc. 
@@ -104,21 +107,22 @@ data LossReason
 
 -- | (Current) game state, inclusing the Level(map), position of the robot etc.
 data GameState = GameState
-        { gsLevel               :: Level                        -- ^ Level
-        , gsRobotPosition       :: Position                     -- ^ Position of the robot in the level(map)
-        , gsLiftPosition        :: Position                     -- ^ Position of the lift in the level(map)
-        , gsTick                :: Int                          -- ^ Current game tick / game updates passed
-        , gsAirLeft             :: Int                          -- ^ Number of steps the robot has left underwater
+        { _level               :: Level                        -- ^ Level
+        , _robotPosition       :: Position                     -- ^ Position of the robot in the level(map)
+        , _liftPosition        :: Position                     -- ^ Position of the lift in the level(map)
+        , _tick                :: Int                          -- ^ Current game tick / game updates passed
+        , _airLeft             :: Int                          -- ^ Number of steps the robot has left underwater
 
-        , gsTargets             :: Map Object Position          -- ^ Mapping a target ot the position in the level(map): Target -> Position of Target
-        , gsTargetSources       :: Map Object [Position]        -- ^ Mapping of a target to a list of trampolines: Target -> [Position of Trampoline]
+        , _targets             :: Map Object Position          -- ^ Mapping a target ot the position in the level(map): Target -> Position of Target
+        , _targetSources       :: Map Object [Position]        -- ^ Mapping of a target to a list of trampolines: Target -> [Position of Trampoline]
 
-        , gsProgress            :: GameProgress                 -- ^ Game progress, e.g. Running, Win, Loss
-        , gsLambdasCollected    :: Int                          -- ^ Number of lambdas the user collected
-        , gsMoves               :: Int                          -- ^ Number of moves made by the user
-        , gsMoveHistory         :: [UserInput]                  -- ^ the moves made by the user
+        , _progress            :: GameProgress                 -- ^ Game progress, e.g. Running, Win, Loss
+        , _lambdasCollected    :: Int                          -- ^ Number of lambdas the user collected
+        , _moves               :: Int                          -- ^ Number of moves made by the user
+        , _moveHistory         :: [UserInput]                  -- ^ the moves made by the user
         }
 
+$( makeLenses [''GameState, ''Level] )
 
 -- | Object values needed at level construction time
 data ObjectInitValues = ObjectInitValues
@@ -128,6 +132,8 @@ data ObjectInitValues = ObjectInitValues
 
 instance Show Object where
         show = (:[]). objectToChar
+
+
 
 
 -- Error
@@ -281,16 +287,16 @@ printLevel gs = do
         unless (M.null trams) $ do
                 putStrLn "Trampolines:"
                 mapM_ (putStrLn . show') $ toList trams
-        when (airLeft < lvWaterproof l) $
-                putStrLn $ "Air: " ++ show airLeft
-        when (razors > 0) $
-                putStrLn $ "Razors: " ++ show razors
-        printLevelMap l
+        when (air < (lvl^.waterproof)) $
+                putStrLn $ "Air: " ++ show air
+        when (razorCount > 0) $
+                putStrLn $ "Razors: " ++ show razorCount
+        printLevelMap lvl
         where
-        l                       = (gsLevel gs) { lvMap = insert (gsRobotPosition gs) Robot (lvMap . gsLevel $ gs) }
-        trams                   = lvTrampolines l
-        airLeft                 = gsAirLeft gs
-        razors                  = lvRazors l
+        lvl                     = levelMap ^%= insert (gs^.robotPosition) Robot $ gs^.level
+        trams                   = lvl^.trampolines 
+        air                     = gs^.airLeft
+        razorCount              = lvl^.razors
         show' (tram, targ)      = show tram ++ " -> " ++ show targ
 
 
@@ -300,7 +306,7 @@ printLevelMap l = (sequence_ . printAList . levelToSortedAList) l >> setSGR [ Re
         where
         print' o y = printNoNl' o y >> putStrLn ""
         printNoNl' o y = do
-                if y > lvWater l then setSGR (objectColor o) else setSGR waterColor
+                if y > l^.water then setSGR (objectColor o) else setSGR waterColor
                 putChar . objectToChar $ o
 
         printAList :: [(Position, Object)] -> [IO ()]
@@ -311,7 +317,7 @@ printLevelMap l = (sequence_ . printAList . levelToSortedAList) l >> setSGR [ Re
         printAList [] = [putStrLn ""]
 
         levelToSortedAList :: Level -> [(Position, Object)]
-        levelToSortedAList = sortBy (compareForLevelOutput `on` fst) . toList . lvMap
+        levelToSortedAList lvl = sortBy (compareForLevelOutput `on` fst) . toList $ levelMap ^$ lvl -- XXX: point-free?
         
         -- Comparison function for printing the level(map)
         compareForLevelOutput :: Position -> Position -> Ordering

@@ -12,6 +12,8 @@ executable LambdaLifter
                    containers,
                    mtl,
                    ansi-terminal,
-                   filepath
+                   filepath,
+                   data-lens,
+                   data-lens-template
   ghc-options:     -Wall
 

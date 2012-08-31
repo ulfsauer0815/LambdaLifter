@@ -23,15 +23,15 @@ readLevelFile f = do -- IO monad
         return $ do -- Error/Either monad
                 -- Process level-string
                 lMap <- levelStringToMap objectInitVals lvlString `catchError` errorHandler
-                return Level { lvName           = levelName
-                             , lvMap            = lMap
-                             , lvTrampolines    = extractTrampolinesFromMetadata        empty                                   lvlMetadata
-                             , lvGrowthRate     = lBeardGrowthRate
-                             , lvRazors         = extractRazorsFromMetadata             (leRazors          defaultLevelValues)  lvlMetadata
-                             , lvFlooding       = extractFloodingFromMetadata           (leFlooding        defaultLevelValues)  lvlMetadata
-                             , lvWater          = extractWaterFromMetadata              (leWater           defaultLevelValues)  lvlMetadata
-                             , lvWaterproof     = extractWaterproofFromMetadata         (leWaterproof      defaultLevelValues)  lvlMetadata
-                             , lvLambdas        = M.size . M.filter isLambdaLike $ lMap }
+                return Level { _name           = levelName
+                             , _levelMap            = lMap
+                             , _trampolines    = extractTrampolinesFromMetadata        empty                                   lvlMetadata
+                             , _growthRate     = lBeardGrowthRate
+                             , _razors         = extractRazorsFromMetadata             (leRazors          defaultLevelValues)  lvlMetadata
+                             , _flooding       = extractFloodingFromMetadata           (leFlooding        defaultLevelValues)  lvlMetadata
+                             , _water          = extractWaterFromMetadata              (leWater           defaultLevelValues)  lvlMetadata
+                             , _waterproof     = extractWaterproofFromMetadata         (leWaterproof      defaultLevelValues)  lvlMetadata
+                             , _lambdas        = M.size . M.filter isLambdaLike $ lMap }
         where
         levelName = takeFileName f
         splitLevelAndMetadataString :: [String] -> ([String], [String])
