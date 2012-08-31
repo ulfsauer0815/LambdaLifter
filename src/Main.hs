@@ -123,15 +123,15 @@ startGames delays games@(game:nextGames) = do
 -- | Calculated the points of the current game state as defined in the ICFP specification
 calculatePoints :: GameState -> Int
 calculatePoints gs
-        = lambdaCount               * 25
-        + moveCount                 * (-1)
-        + isWon       * lambdaCount * 50
-        + isAborted   * lambdaCount * 25
+        = lambdaCount             * 25
+        + moveCount               * (-1)
+        + won       * lambdaCount * 50
+        + aborted   * lambdaCount * 25
         where
-        isWon           = fromEnum $ gs^.progress == Win
-        isAborted       = fromEnum $ gs^.progress == Abort
-        moveCount       = gs^.moves
-        lambdaCount     = gs^.lambdasCollected
+        won           = fromEnum $ isWon gs
+        aborted       = fromEnum $ isAborted gs
+        moveCount     = gs^.moves
+        lambdaCount   = gs^.lambdasCollected
 
 
 -- | plays the game interactively or plays a replay if a user input is given
