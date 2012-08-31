@@ -341,7 +341,7 @@ processObject gs gs' o (x,y)
                 _       -> gs'
         where
         modifyLevelMap f = (level ^=
-                                   (levelMap ^%= f) (gs ^. level)
+                                   (levelMap ^%= f) (gs' ^. level)
                                 ) gs'
 
         insertFallingRock :: Position -> RockType -> LevelMap -> LevelMap -> LevelMap

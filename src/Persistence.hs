@@ -24,7 +24,7 @@ readLevelFile f = do -- IO monad
                 -- Process level-string
                 lMap <- levelStringToMap objectInitVals lvlString `catchError` errorHandler
                 return Level { _name           = levelName
-                             , _levelMap            = lMap
+                             , _levelMap       = lMap
                              , _trampolines    = extractTrampolinesFromMetadata        empty                                   lvlMetadata
                              , _growthRate     = lBeardGrowthRate
                              , _razors         = extractRazorsFromMetadata             (leRazors          defaultLevelValues)  lvlMetadata
