@@ -89,10 +89,9 @@ startGames delays games@(game:nextGames) = do
         case game'^.progress of
                 Restart         -> restartLevel
                 Loss reason     -> do
-                                        let msg = case reason of
+                                        putStrLn $ case reason of
                                                         FallingRock     -> "You got crushed by rocks! :("
                                                         Drowning        -> "You drowned! :("
-                                        putStrLn msg
                                         printStats game'
                                         askForContinue_ restartLevel
                 Win             -> do
@@ -111,7 +110,7 @@ startGames delays games@(game:nextGames) = do
                                         putStrLn "You abandoned Marvin! :'("
                                         printStats game'
 
-                Running         -> error "Invalid state" -- should not happen, playGame loops until progress != Running
+                Running         -> error "Invalid state" -- cannot happen, playGame loops until progress /= Running
         where
         restartLevel    = startGames delays games
         continueGames   = startGames delays nextGames
@@ -136,7 +135,7 @@ calculatePoints gs
 
 -- | plays the game interactively or plays a replay if a user input is given
 playGame :: Maybe [UserInput] -> Delays -> GameState -> IO GameState
-playGame (Just []) _   game = return $ progress ^%= (\p -> if p == Win then Win else Abort) $ game
+playGame (Just []) _   game = return $ progress ^%= (\p -> if p == Win then Win else Abort) $ game -- set progress to Abort when replay is done
 playGame mMoves delays game = do
         clearScreen
         printLevel game
@@ -168,22 +167,28 @@ playGame mMoves delays game = do
           else return game
 
         where
-        tailMoves = case mMoves of
-                Just (_:xs) -> Just xs
-                Just []     -> Just []
-                Nothing     -> Nothing
+        tailMoves = liftM tail mMoves -- tail on empty list cannot occur - see first line pattern match
 
 
 -- | Moves the robot depending on the users input and produces a resulting GameState if the user didn't quit
 moveRobot :: GameState -> UserInput -> Maybe GameState
 moveRobot game dir = do
-        let lvl = game^.level
-        nrp   <- newRobotPosition
+        let lvl         = game^.level
+        let lmap        = lvl^.levelMap
+        let (rX, rY)    = game^.robotPosition
+        
+        let nrp = case dir of -- new robot position
+                UiUp            -> (rX   ,rY+1)
+                UiLeft          -> (rX-1 ,rY  )
+                UiDown          -> (rX   ,rY-1)
+                UiRight         -> (rX+1 ,rY  )
+                _               -> (rX   ,rY  )
+        
         let defaultChanges = (robotPosition     ^= nrp) .
                              (moves             ^%= (+1)) .
                              (moveHistory       ^%= (dir:))
         let clearPosition  = level             ^= (levelMap ^%= insert nrp Empty) (game ^. level)
-        let lmap = lvl^.levelMap
+        
         field <- lookup nrp lmap
         case field of
                 Empty   |  dir == UiUseRazor
@@ -194,6 +199,9 @@ moveRobot game dir = do
                                                         $ game^.level)) .
                                                 defaultChanges
                                                 $ game
+                        where
+                        insertIntoAdjacentBeardCells :: Position -> Object -> LevelMap -> LevelMap
+                        insertIntoAdjacentBeardCells (x,y) obj lvlMap = insertObjectIntoPositions (conditionalInsert isBeard) obj lvlMap (adjacentPositions x y)
                 Empty   | dir /= UiUseRazor
                                 -> return $     defaultChanges
                                                   game
@@ -251,17 +259,6 @@ moveRobot game dir = do
                 _   | dir == UiAbort
                                 -> return $ (progress ^= Abort) game
                 _               -> Nothing
-        where
-        newRobotPosition= case dir of
-                UiUp            -> Just (rX   ,rY+1)
-                UiLeft          -> Just (rX-1 ,rY  )
-                UiDown          -> Just (rX   ,rY-1)
-                UiRight         -> Just (rX+1 ,rY  )
-                _               -> Just (rX   ,rY  ) -- use Nothing to produce an invalid GameState
-        (rX, rY) = game^.robotPosition
-
-        insertIntoAdjacentBeardCells :: Position -> Object -> LevelMap -> LevelMap
-        insertIntoAdjacentBeardCells (x,y) obj lvlMap = insertObjectIntoPositions (conditionalInsert isBeard) obj lvlMap (adjacentPositions x y)
 
 
 -- | The map update phase as described in the ICFP specification
@@ -279,7 +276,7 @@ updateGameState gs
         --gs'          = gs { gsLevel = (gsLevel gs) { lvWater = newWater } }
         updatedGS    = execState (updateLevel keysToUpdate gs) gs -- gs instead of gs' -> robot underwater after map update instead of instantly
         updatedLvl   = updatedGS^.level
-        newWater     = updatedLvl^.water + if floodingRate /= 0 && thisTick `mod` floodingRate == 0 then 1 else 0
+        newWater     = updatedLvl^.water + fromEnum (floodingRate /= 0 && thisTick `mod` floodingRate == 0)
         floodingRate = updatedLvl^.flooding
 
         updateLevel :: [Position] -> GameState -> State GameState GameState
@@ -307,7 +304,7 @@ updateGameState gs
                 (rX,rY)         = oldGs^.robotPosition
 
 
--- | Cell-wise update of the level(map) as described in the icfp specification
+-- | Cell-wise update of the level(map) as described in the ICFP specification
 processObject :: GameState -> GameState -> Object -> Position -> GameState
 processObject gs gs' o (x,y)
         = case o of
@@ -371,7 +368,7 @@ insertObjectIntoPositions condInsert obj = foldl (flip (flip condInsert obj))
 
 -- | "Generic" conditional insert function
 conditionalInsert :: (Object -> Bool) -> Position -> Object -> LevelMap -> LevelMap
-conditionalInsert cond (x,y) obj lmap = if cond' $ lookup (x,y) lmap then insert (x,y) obj lmap else lmap
+conditionalInsert cond (x,y) obj lmap = (if cond' $ lookup (x,y) lmap then insert (x,y) obj else id) lmap
         where cond' = maybe False cond
 
 -- | Computes all adjacent position for a given position
@@ -386,24 +383,22 @@ main = do
         hSetEcho stdin False                    -- no echoing of characters on input
         hSetBuffering stdin NoBuffering         -- disable buffering of input
         hideCursor                              -- hide the cursor
-
+        
         args <- getArgs
         lvlsM  <- mapM readLevelFile args
-
-        case sequence lvlsM of
-                Left err ->
-                        print err  -- Error loading maps, invalid map format
-                Right lvls -> do
-                        let gamesM = mapM createGame lvls
-                        case gamesM of
-                                Left err -> print err -- error loading level
-                                Right gs -> do
-                                        clearScreen
-                                        putStrLn "Welcome to LambdaLifter"
-                                        putStrLn ""
-                                        printControls
-                                        askForContinue_ (startGames delays gs)
-
+        
+        let gamesM = do -- Error/Either monad
+                lvls <- sequence lvlsM -- load all levels
+                mapM createGame lvls   -- create games for all levels
+        
+        case gamesM of
+                Left err -> print err   -- Error loading level or error loading maps, invalid map format
+                Right gs -> do
+                        clearScreen
+                        putStrLn "Welcome to LambdaLifter"
+                        putStrLn ""
+                        printControls
+                        askForContinue_ $ startGames delays gs
         showCursor                              -- reset the cursor
         where
         delays = defaultDelays

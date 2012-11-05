@@ -3,6 +3,7 @@ import           Data.Char             (isDigit)
 import           Data.List             as L (isPrefixOf)
 import           Data.Map              as M (Map, empty, filter, fromList, insert, size)
 import           Prelude               as P hiding (lookup)
+import           Control.Monad         (liftM)
 import           Control.Monad.Error   (catchError)
 import           System.FilePath.Posix (takeFileName)
 
@@ -41,7 +42,7 @@ readLevelFile f = do -- IO monad
         errorHandler e                         = Left e  -- do nothing
 
 
--- TODO: quick and dirty parsing :(
+-- TODO: Proper parsing, quick and dirty atm :(
 
 -- | "Generic" value extraction from a list of strings / metadata description.
 --   Takes a function to match the line, 
@@ -51,25 +52,32 @@ readLevelFile f = do -- IO monad
 extractValueFromMetadata :: (line -> Bool) -> (value -> line -> value) -> value -> [line] -> value
 extractValueFromMetadata lineCondition extractFromLine = foldl (\d l -> if lineCondition l then extractFromLine d l else d )
 
+-- | Extracts a digit value from the metadata
+--   Takes a metadata prefix to look for, 
+--   the default value if nothing is found / neutral element and 
+--   the list of lines
+extractDigitValueFromMetadata :: String -> Int -> [String] -> Int
+extractDigitValueFromMetadata name = extractValueFromMetadata ((name ++ " ") `isPrefixOf`) (\_ -> read . P.filter isDigit)
+
 -- | Extracts the beard growth rate from the metadata
 extractBeardGrowthRateFromMetadata :: Int -> [String] -> Int
-extractBeardGrowthRateFromMetadata  = extractValueFromMetadata ("Growth " `isPrefixOf`) (\_ -> read . P.filter isDigit)
+extractBeardGrowthRateFromMetadata = extractDigitValueFromMetadata "Growth"
 
 -- | Extracts the number of razors from the metadata
 extractRazorsFromMetadata :: Int -> [String] -> Int
-extractRazorsFromMetadata  = extractValueFromMetadata ("Razors " `isPrefixOf`) (\_ -> read . P.filter isDigit)
+extractRazorsFromMetadata = extractDigitValueFromMetadata "Razors"
 
 -- | Extracts water level from the metadata
 extractWaterFromMetadata :: Int -> [String] -> Int
-extractWaterFromMetadata  = extractValueFromMetadata ("Water " `isPrefixOf`) (\_ -> read . P.filter isDigit)
+extractWaterFromMetadata = extractDigitValueFromMetadata "Water"
 
 -- | Extracts the flooding rate from the metadata
 extractFloodingFromMetadata :: Int -> [String] -> Int
-extractFloodingFromMetadata  = extractValueFromMetadata ("Flooding " `isPrefixOf`) (\_ -> read . P.filter isDigit)
+extractFloodingFromMetadata = extractDigitValueFromMetadata "Flooding"
 
 -- | Extracts the time a robot is waterproof from the metadata
 extractWaterproofFromMetadata :: Int -> [String] -> Int
-extractWaterproofFromMetadata  = extractValueFromMetadata ("Waterproof " `isPrefixOf`) (\_ -> read . P.filter isDigit)
+extractWaterproofFromMetadata = extractDigitValueFromMetadata "Waterproof"
 
 -- | Extracts a map of trampolines to targets from the metadata
 extractTrampolinesFromMetadata :: Map Object Object -> [String] -> Map Object Object
@@ -79,20 +87,10 @@ extractTrampolinesFromMetadata = extractValueFromMetadata ("Trampoline " `isPref
                 where (trampo:target:_) = P.filter (`elem` ['A' .. 'I'] ++ ['0'..'9']) l
 
 
-{-
--- Loading without error handling
--levelStringToMap :: ObjectInitValues -> [String] -> LevelMap
--levelStringToMap oiv sl = fromList . concatMap (\(y, s) -> zip [(x,y) | x <- [1..]] (map (charToObject oiv) s)) $ zip [1..] (reverse sl)
--}
-
 -- | Takes the level description as a list of lines and produces a LevelMap - a map containing of the positions and corresponding objects.
 --   ObjectInitValues is used to initialize default values for certain objects, like the beard timer
-levelStringToMap :: ObjectInitValues -> [String] -> Result LevelMap
-levelStringToMap oiv sl = do -- Error/Either monad
-        tiles <- mapM numberedLineToPositionObject $ zip [1..] (reverse sl)
-        return $ fromList . concat $ tiles
-        where
-        numberedLineToPositionObject :: (Int, String) -> Result [((Int,Int), Object)]
-        numberedLineToPositionObject (y, line) = do -- Error/Either monad
-                objectList <- mapM (charToObject oiv) line
-                return $ zip [(x,y) | x <- [1..]] objectList
+levelStringToMap :: ObjectInitValues -> [String] -> Result LevelMap   -- Error/Either monad
+levelStringToMap oiv sl
+        = liftM (fromList . concat)
+          $ mapM (\(y, s) -> liftM (zip [(x, y) | x <- [1 ..]]) (mapM (charToObject oiv) s))
+          $ zip [1..] (reverse sl)
