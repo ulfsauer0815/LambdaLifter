@@ -1,10 +1,81 @@
 name:           LambdaLifter
 version:        0.1
 cabal-version:  >= 1.2
-build-type:     Simple
-author:         ulf
+build-type:     Custom
+author:         Ulf Sauer
+maintainer:     Ulf Sauer <ulf.sauer@gmail.com>
+synopsis:       ASCII game with colors
+homepage:       https://github.com/UlfS/LambdaLifter
+bug-reports:    https://github.com/UlfS/LambdaLifter/issues
+category:       Games
+tested-with:    GHC == 7.4.1
+description:    
+                An interactive version of the ASCII-Game Lambda Lifting as described in the ICFP PC 2012 task.
+                You can find more information on the official site:
+                .
+                * ICFP Programming Contest 2012 Official Site: <http://icfpcontest2012.wordpress.com/>
+                .
+                * Full specification <http://www-fp.cs.st-andrews.ac.uk/~icfppc/task.pdf>
+                .
+                Extensions:
+                .
+                * Weather: <http://www-fp.cs.st-andrews.ac.uk/~icfppc/weather.pdf>
+                .
+                * Trampolines: <http://www-fp.cs.st-andrews.ac.uk/~icfppc/trampoline.pdf>
+                .
+                * Beards: <http://www-fp.cs.st-andrews.ac.uk/~icfppc/beards.pdf>
+                .
+                * Higher Order Rocks: <http://www-fp.cs.st-andrews.ac.uk/~icfppc/horocks.pdf>
+extra-source-files:
+                README.md
+data-files:     
+                maps/beard01.map, 
+                maps/beard02.map, 
+                maps/beard03.map, 
+                maps/beard04.map, 
+                maps/beard05.map, 
+                maps/contest01.map, 
+                maps/contest02.map, 
+                maps/contest03.map, 
+                maps/contest04.map, 
+                maps/contest05.map, 
+                maps/contest06.map, 
+                maps/contest07.map, 
+                maps/contest08.map, 
+                maps/contest09.map, 
+                maps/contest10.map, 
+                maps/flood01.map, 
+                maps/flood02.map, 
+                maps/flood03.map, 
+                maps/flood04.map, 
+                maps/flood05.map, 
+                maps/full01.map, 
+                maps/full02.map, 
+                maps/full03.map, 
+                maps/full04.map, 
+                maps/full05.map, 
+                maps/full06.map, 
+                maps/full07.map, 
+                maps/full08.map, 
+                maps/full09.map, 
+                maps/horock01.map, 
+                maps/horock02.map, 
+                maps/horock03.map, 
+                maps/lightning05.map, 
+                maps/lightning06.map, 
+                maps/lightning07.map, 
+                maps/lightning08.map, 
+                maps/lightning09.map, 
+                maps/lightning10.map, 
+                maps/trampoline01.map, 
+                maps/trampoline02.map, 
+                maps/trampoline03.map
 
-executable LambdaLifter
+source-repository head
+  type:         git
+  location:     git://github.com/UlfS/LambdaLifter.git
+
+executable lambdalifter
   hs-source-dirs:  src
   main-is:         Main.hs
   build-depends:   
@@ -14,6 +85,11 @@ executable LambdaLifter
                    ansi-terminal,
                    filepath,
                    data-lens,
-                   data-lens-template
+                   data-lens-template,
+                   directory
   ghc-options:     -Wall
-
+  other-modules:
+                Game,
+                Input,
+                Persistence,
+                Utils

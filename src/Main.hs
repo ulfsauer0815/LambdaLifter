@@ -1,34 +1,34 @@
+-- | This module contains the game logic.
+--   The core function are
+--   'moveRobot', which computes the new state for the given user-(input) and
+--   'updateGameState' which computes the next state after a tick passes (rocks falling, beards growing, water level rising etc.).
+
 module Main where
 
 import           Data.Lens.Lazy
 import           Control.Concurrent  (threadDelay)
 import           Control.Monad.State
 import           Control.Monad.Error (throwError)
-import           Data.Map            as M (delete, elemAt, filter, fromList, insert, keys, keys, lookup,
+import           Data.Map            as M (delete, elemAt, fromList, insert, keys, keys, lookup,
                                            size, toList)
+import qualified Data.Map            as M (filter)
 import           Data.Maybe          (fromMaybe)
 import           Prelude             as P hiding (lookup)
 import           System.Console.ANSI (clearScreen, hideCursor, showCursor)
 import           System.Environment  (getArgs)
 import           System.IO           (BufferMode(NoBuffering), hSetBuffering, hSetEcho, stdin)
+import           System.Directory    (getDirectoryContents)
 
 import           Game
 import           Input
 import           Persistence
 import           Utils
 
-{--
-TODOs:
- - highscores
-        - stats directory with map files containing the score and the corresponding moves
- - add feature to save the game
-        - probably needed: currentLevel(Map, Trampolines) + RobotPos
-        - extra: score/stats, loaded maps / finished maps
- - use state monad
---}
+import           Paths_LambdaLifter
 
 
--- | Delays for printing the level
+
+-- | Delays for printing the level.
 data Delays = Delays
         { deMapUpdate           :: Int
         , deMove                :: Int
@@ -44,7 +44,7 @@ defaultDelays = Delays
 
 -- Functions
 
--- | Creates a game state from a level - or fails if the level description is invalid
+-- | Creates a game state from a level - or fails if the level description is invalid.
 createGame :: Level -> Result GameState
 createGame lvl = do
         roboPos <- if size robos == 1
@@ -78,7 +78,7 @@ createGame lvl = do
         filterMaybeTuples1 ls = [(x,y) | (x, Just y) <- ls]
 
 
--- | Starts a list of Games, expects delays for printing
+-- | Starts a list of Games, expects delays for printing.
 startGames :: Delays -> [GameState] -> IO ()
 startGames _ [] = putStrLn "You finished all levels! :)"
 startGames delays games@(game:nextGames) = do
@@ -133,8 +133,11 @@ calculatePoints gs
         lambdaCount   = gs^.lambdasCollected
 
 
--- | plays the game interactively or plays a replay if a user input is given
-playGame :: Maybe [UserInput] -> Delays -> GameState -> IO GameState
+-- | Plays the game interactively or plays a replay if a user input is given..
+playGame :: Maybe [UserInput]   -- ^ 'Nothing': Expects user-input, 'Just ...': replays the given input sequence.
+            -> Delays           -- ^ Delay to update the game state after the input state is shown.
+            -> GameState        -- ^ GameState to work on.
+            -> IO GameState     -- ^ GameState after the (user-)input (sequence).
 playGame (Just []) _   game = return $ progress ^%= (\p -> if p == Win then Win else Abort) $ game -- set progress to Abort when replay is done
 playGame mMoves delays game = do
         clearScreen
@@ -151,7 +154,7 @@ playGame mMoves delays game = do
                         UiSkip          -> return $ progress ^= Skip    $ game
                         _               ->
                                 case moveRobot game dir of
-                                        Nothing   -> playGame mMoves delays game
+                                        Nothing    -> playGame mMoves delays game
                                         Just game' -> do
                                                 clearScreen
                                                 printLevel game'
@@ -159,11 +162,10 @@ playGame mMoves delays game = do
                                                 --    otherwise a rock may fall onto the OpenLift the Robot just stepped into, or
                                                 --    or the Robot may drown after stepping into the OpenLift
                                                 if game'^.progress == Win
-                                                  then playGame tailMoves delays game'
+                                                  then  playGame tailMoves delays game'
                                                   else do
-                                                        let game''   = updateGameState game'
                                                         threadDelay $ deMapUpdate delays
-                                                        playGame tailMoves delays game''
+                                                        playGame tailMoves delays (updateGameState game')
           else return game
 
         where
@@ -176,19 +178,19 @@ moveRobot game dir = do
         let lvl         = game^.level
         let lmap        = lvl^.levelMap
         let (rX, rY)    = game^.robotPosition
-        
+
         let nrp = case dir of -- new robot position
                 UiUp            -> (rX   ,rY+1)
                 UiLeft          -> (rX-1 ,rY  )
                 UiDown          -> (rX   ,rY-1)
                 UiRight         -> (rX+1 ,rY  )
                 _               -> (rX   ,rY  )
-        
+
         let defaultChanges = (robotPosition     ^= nrp) .
                              (moves             ^%= (+1)) .
                              (moveHistory       ^%= (dir:))
         let clearPosition  = level             ^= (levelMap ^%= insert nrp Empty) (game ^. level)
-        
+
         field <- lookup nrp lmap
         case field of
                 Empty   |  dir == UiUseRazor
@@ -261,7 +263,7 @@ moveRobot game dir = do
                 _               -> Nothing
 
 
--- | The map update phase as described in the ICFP specification
+-- | The map update phase as described in the ICFP specification.
 updateGameState :: GameState -> GameState
 updateGameState gs
         = (tick         ^= thisTick) .
@@ -285,6 +287,7 @@ updateGameState gs
                 modify $ flip (updateLevelByPosition lvl) pos
                 updateLevel poss lvl
 
+        -- Positions in the order they have to be processed - left to right, bottom to top
         keysToUpdate = sortForTraversal . keys $ gs^.level^.levelMap
 
         updateLevelByPosition :: GameState -> GameState -> Position -> GameState
@@ -304,8 +307,12 @@ updateGameState gs
                 (rX,rY)         = oldGs^.robotPosition
 
 
--- | Cell-wise update of the level(map) as described in the ICFP specification
-processObject :: GameState -> GameState -> Object -> Position -> GameState
+-- | Cell-wise update of the level(map) as described in the ICFP specification.
+processObject :: GameState      -- ^ The original state on which the update should be made. Used for all gamestate lookups.
+                 -> GameState   -- ^ The state which is \"written\" for every update on a position. This state is not used for gamestate lookups.
+                 -> Object      -- ^ The object which is processed (e.g. Rock, Lift, etc.).
+                 -> Position    -- ^ The position of the object in the level.
+                 -> GameState   -- ^ The new GameState.
 processObject gs gs' o (x,y)
         = case o of
                 Rock rt |  lookup (x, y-1)     lvl == Just Empty
@@ -361,44 +368,65 @@ processObject gs gs' o (x,y)
         insertIfEmpty (x',y') obj lmap = if lookup (x',y') lvl == Just Empty then insert (x',y') obj lmap else lmap -- note that lvl not lmap is used
 
 
--- | Insers an object into the specified positions if certain condidions are met (as defined in the "conditional insert function")
+-- | Insers an object into the specified positions if certain condidions are met (as defined in the "conditional insert function").
 insertObjectIntoPositions :: (Position -> Object -> LevelMap -> LevelMap) -> Object -> LevelMap -> [Position] -> LevelMap
 insertObjectIntoPositions condInsert obj = foldl (flip (flip condInsert obj))
 
 
--- | "Generic" conditional insert function
+-- | "Generic" conditional insert function.
 conditionalInsert :: (Object -> Bool) -> Position -> Object -> LevelMap -> LevelMap
 conditionalInsert cond (x,y) obj lmap = (if cond' $ lookup (x,y) lmap then insert (x,y) obj else id) lmap
         where cond' = maybe False cond
 
--- | Computes all adjacent position for a given position
+-- | Computes all adjacent position for a given position.
 adjacentPositions :: Int -> Int -> [(Int,Int)]
 adjacentPositions x y = [(i,j) | i <- [x-1,x,x+1], j <- [y-1,y,y+1]]
 
 
 -- Main
 
+-- | Loads the default level or the level files given via the command line arguments and starts the game.
 main :: IO ()
 main = do
         hSetEcho stdin False                    -- no echoing of characters on input
         hSetBuffering stdin NoBuffering         -- disable buffering of input
         hideCursor                              -- hide the cursor
-        
+
         args <- getArgs
-        lvlsM  <- mapM readLevelFile args
-        
-        let gamesM = do -- Error/Either monad
-                lvls <- sequence lvlsM -- load all levels
-                mapM createGame lvls   -- create games for all levels
-        
-        case gamesM of
-                Left err -> print err   -- Error loading level or error loading maps, invalid map format
-                Right gs -> do
-                        clearScreen
-                        putStrLn "Welcome to LambdaLifter"
-                        putStrLn ""
-                        printControls
-                        askForContinue_ $ startGames delays gs
-        showCursor                              -- reset the cursor
+
+        lvlsM <- do
+                mapList <- case length args of
+                                0 -> getDefaultMaps
+                                _ -> return args
+                mapM readLevelFile mapList
+
+        if null lvlsM
+         then
+                putStrLn "Cannot find any levels, use valid map files as arguments."
+         else do
+                let gamesM = do -- Error/Either monad
+                        lvls <- sequence lvlsM -- load all levels
+                        mapM createGame lvls   -- create games for all levels
+
+                case gamesM of
+                        Left err -> print err   -- Error loading level or error loading maps, invalid map format
+                        Right gs -> do
+                                clearScreen
+                                putStrLn "Welcome to LambdaLifter"
+                                putStrLn ""
+                                printControls
+                                askForContinue_ $ startGames delays gs
+                showCursor                              -- reset the cursor
         where
+        getDefaultMaps = do
+                mapsDir <- getDataFileName mapDir
+                if null mapsDir
+                 then -- no default maps found
+                        return []
+                 else do
+                        mapsContents    <- getDirectoryContents mapsDir
+                        let mapsFiles    = filter (`notElem` ["..", "."]) mapsContents
+                        let mapsDirSlash = mapsDir ++ "/"
+                        return $ map (mapsDirSlash ++) mapsFiles
+        mapDir = "maps/"
         delays = defaultDelays

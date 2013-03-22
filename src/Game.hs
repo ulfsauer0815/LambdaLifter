@@ -1,3 +1,4 @@
+-- | Contains all data structures and basic functions for the game.
 {-# LANGUAGE TemplateHaskell #-}
 module Game ( Object(..), RockType(..), LiftState(..), Position, LevelMap, Level(..), GameProgress(..), LossReason(..), GameState(..)
             , name, levelMap, trampolines, growthRate, razors, lambdas, water, flooding, waterproof -- Level lenses
@@ -24,44 +25,44 @@ import           Input               (UserInput)
 
 -- Data structures
 
--- | Level objects
+-- | Level objects.
 data Object
-        = Robot
-        | Wall
-        | Rock RockType
-        | Lambda
-        | Lift LiftState
-        | Earth
-        | Trampoline Char
-        | Target Char
-        | Beard Int
-        | Razor
-        | Empty
+        = Robot                 -- ^ Robot (the user).
+        | Wall                  -- ^ Wall.
+        | Rock RockType         -- ^ Plain Rock or an higher-order rock. Can fall down.
+        | Lambda                -- ^ Lambda (collectable).
+        | Lift LiftState        -- ^ Lift (open or closed).
+        | Earth                 -- ^ Earth (excavated by the robot).
+        | Trampoline Char       -- ^ Like a teleporter to a target with the same character.
+        | Target Char           -- ^ Target of a trampoline.
+        | Beard Int             -- ^ Beard that grows.
+        | Razor                 -- ^ Razor to cut the beard.
+        | Empty                 -- ^ \"Empty\" object to represent an empty position.
         deriving (Eq, Ord)
 
--- | Lift can be open or closed
+-- | Lift can be open or closed.
 data LiftState
         = Open
         | Closed
         deriving (Eq, Ord)
 
--- | Rock level object
+-- | Rock level object.
 data RockType
         = Simple
         | HigherOrder
         deriving (Eq, Ord)
 
 
--- | Level position
+-- | Level position.
 type Position = (Int, Int)
--- | Level as a map of positions to objects 
+-- | Level as a map of positions to objects.
 type LevelMap = Map Position Object
 
--- | Level, containing the LevelMap and extension infos
+-- | Level, containing the LevelMap and extension infos.
 data Level = Level
         { _name        :: String               -- ^ Name of the level
         , _levelMap    :: LevelMap             -- ^ 2D-Level description
-        , _trampolines :: Map Object Object    -- ^ Trampoline to target mapping: Trampoline -> Target
+        , _trampolines :: Map Object Object    -- ^ Trampoline to target mapping: 'Trampoline' -> 'Target'
         , _growthRate  :: Int                  -- ^ Beard growth rate
         , _razors      :: Int                  -- ^ Number of razors available to the user
         , _lambdas     :: Int                  -- ^ Number of lambdas that have to be collected
@@ -70,16 +71,16 @@ data Level = Level
         , _waterproof  :: Int                  -- ^ Number of steps the robot can survive underwater
         }
 
--- | LevelValues to initialize the Level with, like the beard growth rate etc. 
+-- | LevelValues to initialize the 'Level' with (beard growth rate etc.).
 data LevelValues = LevelValues
-        { leBeardGrowthRate     :: Int
-        , leRazors              :: Int
-        , leFlooding            :: Int
-        , leWater               :: Int
-        , leWaterproof          :: Int
+        { leBeardGrowthRate     :: Int -- ^ Beard growth rate - every x GameState updates.
+        , leRazors              :: Int -- ^ Number of razors the the player starts with.
+        , leFlooding            :: Int -- ^ Flood rate - every x GameState the water rises by 1.
+        , leWater               :: Int -- ^ Initial water level.
+        , leWaterproof          :: Int -- ^ Number of steps the robot lasts underwater.
         }
 
--- | the default level values
+-- | The default level values.
 defaultLevelValues :: LevelValues
 defaultLevelValues = LevelValues
         { leBeardGrowthRate     = 25
@@ -90,21 +91,21 @@ defaultLevelValues = LevelValues
         }
 
 
--- | Current progress of the game
+-- | Current progress of the game.
 data GameProgress
-        = Running
-        | Win
-        | Loss LossReason
-        | Abort
-        | Restart
-        | Skip
+        = Running               -- ^ The game is running.
+        | Win                   -- ^ The level is won.
+        | Loss LossReason       -- ^ The level was lost for the specified reason (e.g. a rock killed the robot).
+        | Abort                 -- ^ The game was cancelled - the application will be shut down.
+        | Restart               -- ^ The level will be restarted.
+        | Skip                  -- ^ The level will be skipped.
         deriving Eq
 
 
--- | GameProgress -> Reason why the user lost the game
+-- | GameProgress - Reason why the user lost the game.
 data LossReason
-        = FallingRock
-        | Drowning
+        = FallingRock   -- ^ A rock killed the 'Robot'.
+        | Drowning      -- ^ The robot drowned.
         deriving Eq
 
 
@@ -127,7 +128,7 @@ data GameState = GameState
 
 $( makeLenses [''GameState, ''Level] )
 
--- | Object values needed at level construction time
+-- | Object values needed at level construction time.
 data ObjectInitValues = ObjectInitValues
         { oiBeardGrowthRate     :: Int
         }
@@ -141,7 +142,7 @@ instance Show Object where
 
 -- Error
 
--- | Error in the game
+-- | Error in the game.
 data GameError
         = RuntimeError String                           -- ^ Generic runtime error
         | LevelError String String                      -- ^ Error in the level description: levelname -> message
@@ -158,79 +159,96 @@ instance Error GameError where
         noMsg   = RuntimeError "Unknown error"
         strMsg  = RuntimeError
 
--- | The Result type - either a error or the "real" value
+-- | The Result type - either a error or the "real" value.
 type Result = Either GameError
 
 
 -- Functions
 
+-- | Is the object/position empty?
 isEmpty :: Object -> Bool
 isEmpty Empty                   = True
 isEmpty _                       = False
 
+-- | Is the object/position a wall?
 isWall :: Object -> Bool
 isWall Wall                     = True
 isWall _                        = False
 
+-- | Is the object/position earth?
 isEarth :: Object -> Bool
 isEarth Earth                   = True
 isEarth _                       = False
 
+-- | Is the object/position an open lift?
 isLiftOpen :: Object -> Bool
 isLiftOpen (Lift Open)          = True
 isLiftOpen _                    = False
 
+-- | Is the object/position a closed lift?
 isLiftClosed :: Object -> Bool
 isLiftClosed (Lift Closed)      = True
 isLiftClosed _                  = False
 
+-- | Is the object/position a trampoline?
 isTrampoline :: Object -> Bool
 isTrampoline (Trampoline _)     = True
 isTrampoline _                  = False
 
+-- | Is the object/position a target (of a trampoline)?
 isTarget :: Object -> Bool
 isTarget (Target _)             = True
 isTarget _                      = False
 
+-- | Is the object/position a beard?
 isBeard :: Object -> Bool
 isBeard (Beard _)               = True
 isBeard _                       = False
 
+-- | Is the object/position a razor?
 isRazor :: Object -> Bool
 isRazor Razor                   = True
 isRazor _                       = False
 
+-- | Is the object/position a rock?
 isRock :: Object -> Bool
 isRock (Rock _)                 = True
 isRock _                        = False
 
+-- | Is the object/position a lambda?
 isLambda :: Object -> Bool
 isLambda Lambda                 = True
 isLambda _                      = False
 
+-- | Is the object/position a higher-order rock?
 isHigherOrderRock :: Object -> Bool
 isHigherOrderRock (Rock HigherOrder) = True
 isHigherOrderRock _                  = False
 
+-- | Is the object/position a lambda-object (lambda or higher-order rock)?
 isLambdaLike :: Object -> Bool
 isLambdaLike o = isLambda o || isHigherOrderRock o
 
+-- | Is the object/position a (plain) rock?
 isSimpleRock :: Object -> Bool
 isSimpleRock (Rock Simple)      = True
 isSimpleRock _                  = False
 
+-- | Is the game won in this GameState?
 isWon :: GameState -> Bool
 isWon gs = gs^.progress == Win
 
+-- | Is the game lost in this GameState?
 isLost :: GameState -> Bool
 isLost gs = case gs^.progress of
               Loss _            -> True
               _                 -> False
 
+-- | Was the game aborted?
 isAborted :: GameState -> Bool
 isAborted gs = gs^.progress == Abort
 
--- | Converts an object to the corresponding character
+-- | Converts an object to the corresponding character.
 objectToChar :: Object -> Char
 objectToChar o
         = case o of
@@ -250,7 +268,7 @@ objectToChar o
 
 
 -- | Converts a character to the corresponding object,
---   expects ObjectInitValues for e.g. the beard growth rate
+--   expects 'ObjectInitValues' for e.g. the beard growth rate.
 charToObject :: ObjectInitValues -> Char -> Result Object
 charToObject oiv c
         = case c of
@@ -270,7 +288,7 @@ charToObject oiv c
                 _                       -> throwError $ InvalidCharacterError c
 
 
--- | Mapping of colors/styles to objects
+-- | Mapping of colors/styles to objects.
 objectColor :: Object -> [SGR]
 objectColor o
         = case o of
@@ -288,13 +306,13 @@ objectColor o
                 Empty        -> []
 
 
--- | the water color used for objects underwater
+-- | The water color used for objects underwater.
 waterColor :: [SGR]
 waterColor = return $ SetColor Foreground Vivid Blue
 
 -- Print functions for data structures
 
--- | Prints the level - 2D level grid and metadata if necessary
+-- | Prints the level - 2D level grid and metadata if necessary.
 printLevel :: GameState -> IO ()
 printLevel gs = do
         unless (M.null trams) $ do
@@ -307,19 +325,19 @@ printLevel gs = do
         printLevelMap lvl
         where
         lvl                = levelMap ^%= insert (gs^.robotPosition) Robot $ gs^.level
-        trams              = lvl^.trampolines 
+        trams              = lvl^.trampolines
         air                = gs^.airLeft
         razorCount         = lvl^.razors
         show' (tram, targ) = show tram ++ " -> " ++ show targ
 
 
--- | prints the 2D level(map)
+-- | Prints the 2D level(map).
 printLevelMap :: Level -> IO ()
 printLevelMap l = (sequence_ . printAList . levelToSortedAList) l >> setSGR [ Reset ]
         where
         print' o y = printNoNl' o y >> putStrLn ""
         printNoNl' o y = do
-                if y > l^.water then setSGR (objectColor o) else setSGR waterColor
+                setSGR $ if y > l^.water then objectColor o else waterColor
                 putChar . objectToChar $ o
 
         printAList :: [(Position, Object)] -> [IO ()]
@@ -331,7 +349,7 @@ printLevelMap l = (sequence_ . printAList . levelToSortedAList) l >> setSGR [ Re
 
         levelToSortedAList :: Level -> [(Position, Object)]
         levelToSortedAList lvl = sortBy (compareForLevelOutput `on` fst) . toList $ levelMap ^$ lvl -- XXX: point-free?
-        
+
         -- Comparison function for printing the level(map)
         compareForLevelOutput :: Position -> Position -> Ordering
         compareForLevelOutput (x0,y0) (x1,y1)
@@ -342,7 +360,7 @@ printLevelMap l = (sequence_ . printAList . levelToSortedAList) l >> setSGR [ Re
                 | otherwise = EQ
 
 
--- | Sorting function for updating the level
+-- | Sorting function for updating the level.
 sortForTraversal :: [Position] -> [Position]
 sortForTraversal = sortBy compareForLevelTraversal
         where

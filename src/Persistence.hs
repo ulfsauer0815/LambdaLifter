@@ -1,3 +1,4 @@
+-- | This module contains all functions to read levelfiles and parsing the metadata.
 module Persistence ( readLevelFile ) where
 import           Data.Char             (isDigit)
 import           Data.List             as L (isPrefixOf)
@@ -13,7 +14,7 @@ import           Game                  (Level(..), LevelMap, LevelValues(..), Ob
  Result, GameError(..))
 
 
--- | Reads a file containing the level description and returns the Level (or an Error)
+-- | Reads a file containing the level description and returns the Level (or an Error).
 readLevelFile :: FilePath -> IO (Result Level)
 readLevelFile f = do -- IO monad
         c  <- readFile f
@@ -45,41 +46,41 @@ readLevelFile f = do -- IO monad
 -- TODO: Proper parsing, quick and dirty atm :(
 
 -- | "Generic" value extraction from a list of strings / metadata description.
---   Takes a function to match the line, 
---   a function to extract the value from that line (with an accumulator of the previous value), 
---   the default value if nothing is found / neutral element and 
---   the list of lines
+--   Takes a function to match the line,
+--   a function to extract the value from that line (with an accumulator of the previous value),
+--   the default value if nothing is found / neutral element and
+--   the list of lines.
 extractValueFromMetadata :: (line -> Bool) -> (value -> line -> value) -> value -> [line] -> value
 extractValueFromMetadata lineCondition extractFromLine = foldl (\d l -> if lineCondition l then extractFromLine d l else d )
 
 -- | Extracts a digit value from the metadata
---   Takes a metadata prefix to look for, 
---   the default value if nothing is found / neutral element and 
---   the list of lines
+--   Takes a metadata prefix to look for,
+--   the default value if nothing is found / neutral element and
+--   the list of lines.
 extractDigitValueFromMetadata :: String -> Int -> [String] -> Int
 extractDigitValueFromMetadata name = extractValueFromMetadata ((name ++ " ") `isPrefixOf`) (\_ -> read . P.filter isDigit)
 
--- | Extracts the beard growth rate from the metadata
+-- | Extracts the beard growth rate from the metadata.
 extractBeardGrowthRateFromMetadata :: Int -> [String] -> Int
 extractBeardGrowthRateFromMetadata = extractDigitValueFromMetadata "Growth"
 
--- | Extracts the number of razors from the metadata
+-- | Extracts the number of razors from the metadata.
 extractRazorsFromMetadata :: Int -> [String] -> Int
 extractRazorsFromMetadata = extractDigitValueFromMetadata "Razors"
 
--- | Extracts water level from the metadata
+-- | Extracts water level from the metadata.
 extractWaterFromMetadata :: Int -> [String] -> Int
 extractWaterFromMetadata = extractDigitValueFromMetadata "Water"
 
--- | Extracts the flooding rate from the metadata
+-- | Extracts the flooding rate from the metadata.
 extractFloodingFromMetadata :: Int -> [String] -> Int
 extractFloodingFromMetadata = extractDigitValueFromMetadata "Flooding"
 
--- | Extracts the time a robot is waterproof from the metadata
+-- | Extracts the time a robot is waterproof from the metadata.
 extractWaterproofFromMetadata :: Int -> [String] -> Int
 extractWaterproofFromMetadata = extractDigitValueFromMetadata "Waterproof"
 
--- | Extracts a map of trampolines to targets from the metadata
+-- | Extracts a map of trampolines to targets from the metadata.
 extractTrampolinesFromMetadata :: Map Object Object -> [String] -> Map Object Object
 extractTrampolinesFromMetadata = extractValueFromMetadata ("Trampoline " `isPrefixOf`) extract
         where
@@ -88,7 +89,7 @@ extractTrampolinesFromMetadata = extractValueFromMetadata ("Trampoline " `isPref
 
 
 -- | Takes the level description as a list of lines and produces a LevelMap - a map containing of the positions and corresponding objects.
---   ObjectInitValues is used to initialize default values for certain objects, like the beard timer
+--   ObjectInitValues is used to initialize default values for certain objects, like the beard timer.
 levelStringToMap :: ObjectInitValues -> [String] -> Result LevelMap   -- Error/Either monad
 levelStringToMap oiv sl
         = liftM (fromList . concat)

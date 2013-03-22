@@ -1,3 +1,4 @@
+-- | This module contains the input related functions.
 module Input ( UserInput(..), getInput, showKeyMapping, showMoveHistory, printControls, askForAction, askForContinue, askForContinue_) where
 
 import           Data.Char           (toLower)
@@ -6,7 +7,7 @@ import           Data.Maybe          (mapMaybe)
 import           System.Console.ANSI (BlinkSpeed(..), SGR(..), setSGR)
 
 
--- | The actions available to a user
+-- | The actions available to a user.
 data UserInput
         = UiLeft
         | UiRight
@@ -26,7 +27,7 @@ instance Show UserInput where
 
 -- Input processing
 
--- | Reads the users keystokes until a valid action is found
+-- | Reads the users keystokes until a valid action is found.
 getInput :: IO UserInput
 getInput = do
         c <- getChar
@@ -50,7 +51,7 @@ getInput = do
                 _   -> Nothing
 
 
--- | The keymappings that can be printed in help messages
+-- | The keymappings that can be printed in help messages.
 showKeyMapping :: UserInput -> String
 showKeyMapping a = case a of
         UiUp      -> "W"
@@ -65,7 +66,7 @@ showKeyMapping a = case a of
         UiContinue-> "SPACE"
 
 
--- | The "official" keymapping defined in the ICFP task specification
+-- | The "official" keymapping defined in the ICFP task specification.
 showKeyMappingOfficial :: UserInput -> Maybe Char
 showKeyMappingOfficial a = case a of
         UiUp      -> return 'U'
@@ -87,7 +88,7 @@ showMoveHistory :: [UserInput] -> String
 showMoveHistory = mapMaybe showKeyMappingOfficial  . reverse
 
 
--- | Asks the User if he wants to continue and executes the corresponding IO actions
+-- | Asks the User if he wants to continue and executes the corresponding IO actions.
 askForContinue :: IO () -> IO () -> IO ()
 askForContinue actionAbort actionContinue
         = askForAction
@@ -109,12 +110,12 @@ askForAction actionMap text = do
                 findWithDefault getInput' a actionMap
 
 
--- | Default "Press space to continue" question
+-- | Default "Press space to continue" question.
 askForContinue_ :: IO () -> IO ()
 askForContinue_ = askForContinue (return ())
 
 
--- | Prints the available user controls
+-- | Prints the available user controls.
 printControls :: IO ()
 printControls = do
         putStrLn "Controls: "
