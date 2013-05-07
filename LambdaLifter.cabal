@@ -1,7 +1,7 @@
 name:           LambdaLifter
 version:        0.1
 cabal-version:  >= 1.2
-build-type:     Custom
+build-type:     Simple
 author:         Ulf Sauer
 maintainer:     Ulf Sauer <ulf.sauer@gmail.com>
 synopsis:       ASCII game with colors
