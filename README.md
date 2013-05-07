@@ -38,4 +38,4 @@ Install Haskell and cabal ("Haskell package manager"), e.g.
 Cabal will print the path to the executable (usually */home/$USER/.cabal/bin/*).
 If that directory is set in your PATH environment variable, you can just run
 
-  $ lambdalifter
+    $ lambdalifter
